@@ -116,6 +116,8 @@ npm run build
 | `PUT` | `/api/vocabularies/{id}` | 어휘 수정 |
 | `DELETE` | `/api/vocabularies/{id}` | 어휘 삭제 |
 | `POST` | `/api/vocabularies/csv` | CSV 어휘 대량 등록 |
+| `POST` | `/api/quizzes` | 퀴즈 생성 |
+| `POST` | `/api/quizzes/submit` | 정답 제출 |
 
 Request body:
 
@@ -202,6 +204,103 @@ Response example:
 }
 ```
 
+## Quiz API
+
+Quiz modes:
+
+```text
+WORD_TO_MEANING
+MEANING_TO_WORD
+```
+
+`WORD_TO_MEANING`은 단어를 보고 뜻을 고르는 방식입니다.
+`MEANING_TO_WORD`는 뜻을 보고 단어를 고르는 방식입니다.
+
+Create quiz:
+
+```bash
+curl -X POST http://localhost:8080/api/quizzes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "category": "NOUN",
+    "mode": "WORD_TO_MEANING",
+    "questionCount": 2
+  }'
+```
+
+Quiz generation rules:
+
+- `category`는 `VocabularyCategory` 값 중 하나여야 합니다.
+- `questionCount`는 1 이상이어야 합니다.
+- 선택한 category의 어휘에서 랜덤으로 문제를 생성합니다.
+- 같은 퀴즈 세트 안에서 동일한 `vocabularyId`는 중복 출제되지 않습니다.
+- 각 문제는 정답 1개와 오답 3개를 포함한 4지선다입니다.
+- 오답은 같은 category의 다른 Vocabulary에서 가져옵니다.
+- 같은 선택지 text가 중복되어 정답이 여러 개처럼 보이지 않도록 생성합니다.
+- 선택지 순서는 매번 랜덤으로 섞입니다.
+- 퀴즈 문제 자체는 DB에 저장하지 않고 Vocabulary 데이터를 기반으로 동적으로 생성합니다.
+- 생성 응답에는 정답이 노출되지 않습니다.
+
+Create quiz response example:
+
+```json
+[
+  {
+    "vocabularyId": 1,
+    "mode": "WORD_TO_MEANING",
+    "questionText": "사과",
+    "options": [
+      {
+        "optionId": 3,
+        "text": "grape"
+      },
+      {
+        "optionId": 1,
+        "text": "apple"
+      },
+      {
+        "optionId": 2,
+        "text": "banana"
+      },
+      {
+        "optionId": 4,
+        "text": "strawberry"
+      }
+    ]
+  }
+]
+```
+
+Submit answer:
+
+```bash
+curl -X POST http://localhost:8080/api/quizzes/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vocabularyId": 1,
+    "mode": "WORD_TO_MEANING",
+    "selectedOptionId": 1
+  }'
+```
+
+Submit answer response example:
+
+```json
+{
+  "correct": true,
+  "correctAnswer": "apple",
+  "vocabularyId": 1
+}
+```
+
+Quiz error cases:
+
+- 선택한 category의 어휘가 4개 미만이면 4지선다 퀴즈를 생성할 수 없습니다.
+- `questionCount`가 선택한 category의 전체 어휘 수보다 크면 생성할 수 없습니다.
+- 같은 category 안에 선택지로 사용할 서로 다른 text가 4개 미만이면 생성할 수 없습니다.
+- 존재하지 않는 category 또는 mode는 400 응답으로 처리됩니다.
+- 정답 제출 시 클라이언트의 정답 여부는 신뢰하지 않고 서버의 Vocabulary 데이터를 기준으로 판정합니다.
+
 ## Current Scope
 
 Implemented in this setup:
@@ -213,11 +312,12 @@ Implemented in this setup:
 - Environment variable based database configuration
 - Vocabulary entity and CRUD API
 - Vocabulary CSV upload
+- Quiz generation API
+- Quiz answer submission API
 
 Not implemented yet:
 
-- Quiz generation
-- Answer checking
+- Frontend quiz UI
 - Wrong-answer storage or review
 - User accounts
 - Authentication or authorization
