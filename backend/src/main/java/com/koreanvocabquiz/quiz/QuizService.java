@@ -2,6 +2,7 @@ package com.koreanvocabquiz.quiz;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,10 +23,16 @@ public class QuizService {
 
     private final VocabularyRepository vocabularyRepository;
     private final WrongAnswerService wrongAnswerService;
+    private final QuizQuestionSessionStore sessionStore;
 
-    public QuizService(VocabularyRepository vocabularyRepository, WrongAnswerService wrongAnswerService) {
+    public QuizService(
+            VocabularyRepository vocabularyRepository,
+            WrongAnswerService wrongAnswerService,
+            QuizQuestionSessionStore sessionStore
+    ) {
         this.vocabularyRepository = vocabularyRepository;
         this.wrongAnswerService = wrongAnswerService;
+        this.sessionStore = sessionStore;
     }
 
     public List<QuizQuestionResponse> create(QuizCreateRequest request) {
@@ -35,51 +42,88 @@ public class QuizService {
     }
 
     public List<QuizQuestionResponse> createFromVocabularies(List<Vocabulary> vocabularies, QuizMode mode, int questionCount) {
-        if (vocabularies.size() < OPTION_COUNT) {
+        return createFromVocabularies(vocabularies, vocabularies, mode, questionCount);
+    }
+
+    public List<QuizQuestionResponse> createFromVocabularies(
+            List<Vocabulary> questionVocabularies,
+            List<Vocabulary> optionSourceVocabularies,
+            QuizMode mode,
+            int questionCount
+    ) {
+        if (optionSourceVocabularies.size() < OPTION_COUNT) {
             throw new QuizGenerationException("At least 4 vocabularies are required in the category to create multiple-choice quizzes.");
         }
-        if (questionCount > vocabularies.size()) {
-            throw new QuizGenerationException("questionCount cannot be greater than the number of vocabularies in the category.");
-        }
-        if (distinctAnswerCount(vocabularies, mode) < OPTION_COUNT) {
-            throw new QuizGenerationException("At least 4 different option texts are required in the category.");
+        if (questionCount > questionVocabularies.size()) {
+            throw new QuizGenerationException("questionCount cannot be greater than the number of vocabularies available for this quiz.");
         }
 
-        List<Vocabulary> questions = new ArrayList<>(vocabularies);
+        List<Vocabulary> questions = new ArrayList<>(questionVocabularies);
         Collections.shuffle(questions);
 
         return questions.stream()
                 .limit(questionCount)
-                .map(vocabulary -> createQuestion(vocabulary, vocabularies, mode))
+                .map(vocabulary -> createQuestion(vocabulary, optionSourceVocabularies, mode))
                 .toList();
     }
 
     @Transactional
     public QuizSubmitResponse submit(QuizSubmitRequest request) {
-        Vocabulary correctVocabulary = vocabularyRepository.findById(request.vocabularyId())
-                .orElseThrow(() -> new ResourceNotFoundException("Vocabulary not found. id=" + request.vocabularyId()));
-        Vocabulary selectedVocabulary = vocabularyRepository.findById(request.selectedOptionId())
-                .orElseThrow(() -> new ResourceNotFoundException("Selected option not found. id=" + request.selectedOptionId()));
+        QuizQuestionSession session = sessionStore.findValid(request.questionId())
+                .orElseThrow(() -> new QuizSubmissionException("Question is not valid or has expired."));
 
-        String correctAnswer = answerText(correctVocabulary, request.mode());
-        boolean correct = correctAnswer.equals(answerText(selectedVocabulary, request.mode()));
-
-        if (request.wrongAnswerReview()) {
-            wrongAnswerService.handleReviewSubmission(correctVocabulary, request.mode(), correct);
-        } else if (!correct) {
-            wrongAnswerService.recordWrongAnswer(correctVocabulary, request.mode());
+        if (!session.optionVocabularyIds().containsKey(request.selectedOptionId())) {
+            throw new QuizSubmissionException("Selected option is not included in the question.");
         }
 
-        return new QuizSubmitResponse(correct, correctAnswer, correctVocabulary.getId());
+        Vocabulary correctVocabulary = vocabularyRepository.findById(session.vocabularyId())
+                .orElseThrow(() -> new ResourceNotFoundException("Vocabulary not found. id=" + session.vocabularyId()));
+
+        boolean correct = session.correctOptionId().equals(request.selectedOptionId());
+
+        if (request.wrongAnswerReview()) {
+            wrongAnswerService.handleReviewSubmission(correctVocabulary, session.mode(), correct);
+        } else if (!correct) {
+            wrongAnswerService.recordWrongAnswer(correctVocabulary, session.mode());
+        }
+
+        return new QuizSubmitResponse(correct, session.correctAnswer(), correctVocabulary.getId());
     }
 
-    private QuizQuestionResponse createQuestion(Vocabulary vocabulary, List<Vocabulary> categoryVocabularies, QuizMode mode) {
+    private QuizQuestionResponse createQuestion(Vocabulary vocabulary, List<Vocabulary> optionSourceVocabularies, QuizMode mode) {
         List<QuizOptionResponse> options = new ArrayList<>();
-        options.add(new QuizOptionResponse(vocabulary.getId(), answerText(vocabulary, mode)));
-        options.addAll(createDistractors(vocabulary, categoryVocabularies, mode));
+        Map<String, Long> optionVocabularyIds = new HashMap<>();
+
+        String correctOptionId = sessionStore.nextId();
+        String correctAnswer = answerText(vocabulary, mode);
+        options.add(new QuizOptionResponse(correctOptionId, correctAnswer));
+        optionVocabularyIds.put(correctOptionId, vocabulary.getId());
+
+        for (Vocabulary distractor : createDistractors(vocabulary, optionSourceVocabularies, mode)) {
+            String optionId = sessionStore.nextId();
+            options.add(new QuizOptionResponse(optionId, answerText(distractor, mode)));
+            optionVocabularyIds.put(optionId, distractor.getId());
+        }
+
+        if (options.size() < OPTION_COUNT) {
+            throw new QuizGenerationException("At least 4 different option texts are required in the category.");
+        }
+
         Collections.shuffle(options);
 
+        String questionId = sessionStore.nextId();
+        sessionStore.save(new QuizQuestionSession(
+                questionId,
+                vocabulary.getId(),
+                mode,
+                Map.copyOf(optionVocabularyIds),
+                correctOptionId,
+                correctAnswer,
+                sessionStore.expiresAt()
+        ));
+
         return new QuizQuestionResponse(
+                questionId,
                 vocabulary.getId(),
                 mode,
                 questionText(vocabulary, mode),
@@ -87,7 +131,7 @@ public class QuizService {
         );
     }
 
-    private List<QuizOptionResponse> createDistractors(Vocabulary correctVocabulary, List<Vocabulary> categoryVocabularies, QuizMode mode) {
+    private List<Vocabulary> createDistractors(Vocabulary correctVocabulary, List<Vocabulary> categoryVocabularies, QuizMode mode) {
         String correctAnswer = answerText(correctVocabulary, mode);
         List<Vocabulary> candidates = new ArrayList<>(categoryVocabularies);
         Collections.shuffle(candidates);
@@ -95,7 +139,9 @@ public class QuizService {
         Map<String, Vocabulary> distinctCandidates = new LinkedHashMap<>();
         for (Vocabulary candidate : candidates) {
             String answer = answerText(candidate, mode);
-            if (!candidate.getId().equals(correctVocabulary.getId()) && !answer.equals(correctAnswer)) {
+            if (candidate.getCategory() == correctVocabulary.getCategory()
+                    && !candidate.getId().equals(correctVocabulary.getId())
+                    && !answer.equals(correctAnswer)) {
                 distinctCandidates.putIfAbsent(answer, candidate);
             }
         }
@@ -103,15 +149,7 @@ public class QuizService {
         return distinctCandidates.values()
                 .stream()
                 .limit(OPTION_COUNT - 1)
-                .map(candidate -> new QuizOptionResponse(candidate.getId(), answerText(candidate, mode)))
                 .toList();
-    }
-
-    private long distinctAnswerCount(List<Vocabulary> vocabularies, QuizMode mode) {
-        return vocabularies.stream()
-                .map(vocabulary -> answerText(vocabulary, mode))
-                .distinct()
-                .count();
     }
 
     private String questionText(Vocabulary vocabulary, QuizMode mode) {

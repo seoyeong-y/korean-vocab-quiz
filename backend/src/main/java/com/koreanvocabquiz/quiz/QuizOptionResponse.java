@@ -1,7 +1,7 @@
 package com.koreanvocabquiz.quiz;
 
 public record QuizOptionResponse(
-        Long optionId,
+        String optionId,
         String text
 ) {
 }

@@ -1,6 +1,7 @@
 package com.koreanvocabquiz.wronganswer;
 
 import java.util.List;
+import java.util.Set;
 
 import com.koreanvocabquiz.common.ResourceNotFoundException;
 import com.koreanvocabquiz.quiz.QuizGenerationException;
@@ -8,6 +9,8 @@ import com.koreanvocabquiz.quiz.QuizMode;
 import com.koreanvocabquiz.quiz.QuizQuestionResponse;
 import com.koreanvocabquiz.quiz.QuizService;
 import com.koreanvocabquiz.vocabulary.Vocabulary;
+import com.koreanvocabquiz.vocabulary.VocabularyCategory;
+import com.koreanvocabquiz.vocabulary.VocabularyRepository;
 
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -18,10 +21,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class WrongAnswerService {
 
     private final WrongAnswerRepository wrongAnswerRepository;
+    private final VocabularyRepository vocabularyRepository;
     private final QuizService quizService;
 
-    public WrongAnswerService(WrongAnswerRepository wrongAnswerRepository, @Lazy QuizService quizService) {
+    public WrongAnswerService(
+            WrongAnswerRepository wrongAnswerRepository,
+            VocabularyRepository vocabularyRepository,
+            @Lazy QuizService quizService
+    ) {
         this.wrongAnswerRepository = wrongAnswerRepository;
+        this.vocabularyRepository = vocabularyRepository;
         this.quizService = quizService;
     }
 
@@ -33,18 +42,28 @@ public class WrongAnswerService {
     }
 
     public List<QuizQuestionResponse> createReviewQuiz(WrongAnswerQuizCreateRequest request) {
-        List<Vocabulary> vocabularies = wrongAnswerRepository.findAllByOrderByLastWrongAtDesc()
+        List<Vocabulary> questionVocabularies = wrongAnswerRepository.findAllByOrderByLastWrongAtDesc()
                 .stream()
                 .filter(wrongAnswer -> wrongAnswer.getQuizMode() == request.mode())
                 .map(WrongAnswer::getVocabulary)
                 .toList();
 
-        if (vocabularies.isEmpty()) {
+        if (questionVocabularies.isEmpty()) {
             throw new QuizGenerationException("No wrong answers are available for review.");
         }
 
-        int questionCount = request.questionCount() == null ? vocabularies.size() : request.questionCount();
-        return quizService.createFromVocabularies(vocabularies, request.mode(), questionCount);
+        Set<VocabularyCategory> categories = questionVocabularies.stream()
+                .map(Vocabulary::getCategory)
+                .collect(java.util.stream.Collectors.toSet());
+        List<Vocabulary> optionSourceVocabularies = vocabularyRepository.findByCategoryIn(categories);
+
+        int questionCount = request.questionCount() == null ? questionVocabularies.size() : request.questionCount();
+        return quizService.createFromVocabularies(
+                questionVocabularies,
+                optionSourceVocabularies,
+                request.mode(),
+                questionCount
+        );
     }
 
     @Transactional

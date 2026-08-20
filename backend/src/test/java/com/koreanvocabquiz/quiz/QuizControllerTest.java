@@ -1,5 +1,6 @@
 package com.koreanvocabquiz.quiz;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
@@ -8,6 +9,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.UUID;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koreanvocabquiz.vocabulary.Vocabulary;
 import com.koreanvocabquiz.vocabulary.VocabularyCategory;
 import com.koreanvocabquiz.vocabulary.VocabularyRepository;
@@ -35,6 +44,12 @@ class QuizControllerTest {
 
     @Autowired
     private VocabularyRepository vocabularyRepository;
+
+    @Autowired
+    private QuizQuestionSessionStore sessionStore;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     private Vocabulary apple;
     private Vocabulary banana;
@@ -65,6 +80,7 @@ class QuizControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].questionId").exists())
                 .andExpect(jsonPath("$[0].vocabularyId").exists())
                 .andExpect(jsonPath("$[0].mode").value("WORD_TO_MEANING"))
                 .andExpect(jsonPath("$[0].questionText", not(matchesPattern("apple|banana|grape|strawberry"))))
@@ -111,6 +127,132 @@ class QuizControllerTest {
 
     @Test
     void submitCorrectAnswer() throws Exception {
+        TestSession session = saveSession(apple, apple, QuizMode.WORD_TO_MEANING);
+
+        mockMvc.perform(post("/api/quizzes/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s",
+                                  "selectedOptionId": "%s"
+                                }
+                                """.formatted(session.questionId(), session.selectedOptionId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.correct").value(true))
+                .andExpect(jsonPath("$.correctAnswer").value("apple"))
+                .andExpect(jsonPath("$.vocabularyId").value(apple.getId()));
+    }
+
+    @Test
+    void submitWrongAnswer() throws Exception {
+        TestSession session = saveSession(apple, banana, QuizMode.MEANING_TO_WORD);
+
+        mockMvc.perform(post("/api/quizzes/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s",
+                                  "selectedOptionId": "%s"
+                                }
+                                """.formatted(session.questionId(), session.selectedOptionId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.correct").value(false))
+                .andExpect(jsonPath("$.correctAnswer").value("사과"))
+                .andExpect(jsonPath("$.vocabularyId").value(apple.getId()));
+    }
+
+    @Test
+    void submitWordToMeaningAnswerFromGeneratedQuestion() throws Exception {
+        QuizQuestionResponse question = createOneQuestion("WORD_TO_MEANING");
+        String selectedOptionId = question.options().get(0).optionId();
+
+        mockMvc.perform(post("/api/quizzes/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s",
+                                  "selectedOptionId": "%s"
+                                }
+                                """.formatted(question.questionId(), selectedOptionId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vocabularyId").value(question.vocabularyId()));
+    }
+
+    @Test
+    void submitMeaningToWordAnswerFromGeneratedQuestion() throws Exception {
+        QuizQuestionResponse question = createOneQuestion("MEANING_TO_WORD");
+        String selectedOptionId = question.options().get(0).optionId();
+
+        mockMvc.perform(post("/api/quizzes/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s",
+                                  "selectedOptionId": "%s"
+                                }
+                                """.formatted(question.questionId(), selectedOptionId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vocabularyId").value(question.vocabularyId()));
+    }
+
+    @Test
+    void createOptionsWithoutDuplicateTextsWhenSameMeaningExists() throws Exception {
+        vocabularyRepository.save(new Vocabulary("복숭아", "apple", VocabularyCategory.NOUN, null));
+        vocabularyRepository.save(new Vocabulary("수박", "watermelon", VocabularyCategory.NOUN, null));
+
+        QuizQuestionResponse question = createOneQuestion("WORD_TO_MEANING");
+
+        assertEquals(
+                question.options().size(),
+                question.options().stream().map(QuizOptionResponse::text).collect(java.util.stream.Collectors.toCollection(HashSet::new)).size()
+        );
+    }
+
+    @Test
+    void createOptionsWithoutDuplicateTextsWhenSameWordExists() throws Exception {
+        vocabularyRepository.save(new Vocabulary("사과", "apology", VocabularyCategory.NOUN, null));
+        vocabularyRepository.save(new Vocabulary("수박", "watermelon", VocabularyCategory.NOUN, null));
+
+        QuizQuestionResponse question = createOneQuestion("MEANING_TO_WORD");
+
+        assertEquals(
+                question.options().size(),
+                question.options().stream().map(QuizOptionResponse::text).collect(java.util.stream.Collectors.toCollection(HashSet::new)).size()
+        );
+    }
+
+    @Test
+    void rejectOptionThatWasNotIncludedInGeneratedQuestion() throws Exception {
+        QuizQuestionResponse question = createOneQuestion("WORD_TO_MEANING");
+
+        mockMvc.perform(post("/api/quizzes/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s",
+                                  "selectedOptionId": "%s"
+                                }
+                                """.formatted(question.questionId(), UUID.randomUUID())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.messages[0]").value("Selected option is not included in the question."));
+    }
+
+    @Test
+    void rejectSubmissionWithoutGeneratedQuestionId() throws Exception {
+        mockMvc.perform(post("/api/quizzes/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s",
+                                  "selectedOptionId": "%s"
+                                }
+                                """.formatted(UUID.randomUUID(), UUID.randomUUID())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.messages[0]").value("Question is not valid or has expired."));
+    }
+
+    @Test
+    void rejectLegacySubmissionWithArbitraryVocabularyId() throws Exception {
         mockMvc.perform(post("/api/quizzes/submit")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -120,27 +262,47 @@ class QuizControllerTest {
                                   "selectedOptionId": %d
                                 }
                                 """.formatted(apple.getId(), apple.getId())))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.correct").value(true))
-                .andExpect(jsonPath("$.correctAnswer").value("apple"))
-                .andExpect(jsonPath("$.vocabularyId").value(apple.getId()));
+                .andExpect(status().isBadRequest());
     }
 
     @Test
-    void submitWrongAnswer() throws Exception {
+    void judgeByOptionIdWhenSameMeaningExists() throws Exception {
+        vocabularyRepository.save(new Vocabulary("복숭아", "apple", VocabularyCategory.NOUN, null));
+        vocabularyRepository.save(new Vocabulary("수박", "watermelon", VocabularyCategory.NOUN, null));
+
+        TestSession session = saveSession(apple, banana, QuizMode.WORD_TO_MEANING);
+
         mockMvc.perform(post("/api/quizzes/submit")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "vocabularyId": %d,
-                                  "mode": "MEANING_TO_WORD",
-                                  "selectedOptionId": %d
+                                  "questionId": "%s",
+                                  "selectedOptionId": "%s"
                                 }
-                                """.formatted(apple.getId(), banana.getId())))
+                                """.formatted(session.questionId(), session.selectedOptionId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.correct").value(false))
-                .andExpect(jsonPath("$.correctAnswer").value("사과"))
-                .andExpect(jsonPath("$.vocabularyId").value(apple.getId()));
+                .andExpect(jsonPath("$.correctAnswer").value("apple"));
+    }
+
+    @Test
+    void judgeByOptionIdWhenSameWordExists() throws Exception {
+        vocabularyRepository.save(new Vocabulary("사과", "apology", VocabularyCategory.NOUN, null));
+        vocabularyRepository.save(new Vocabulary("수박", "watermelon", VocabularyCategory.NOUN, null));
+
+        TestSession session = saveSession(apple, banana, QuizMode.MEANING_TO_WORD);
+
+        mockMvc.perform(post("/api/quizzes/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s",
+                                  "selectedOptionId": "%s"
+                                }
+                                """.formatted(session.questionId(), session.selectedOptionId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.correct").value(false))
+                .andExpect(jsonPath("$.correctAnswer").value("사과"));
     }
 
     @Test
@@ -170,7 +332,7 @@ class QuizControllerTest {
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.messages[0]").value("questionCount cannot be greater than the number of vocabularies in the category."));
+                .andExpect(jsonPath("$.messages[0]").value("questionCount cannot be greater than the number of vocabularies available for this quiz."));
     }
 
     @Test
@@ -201,5 +363,51 @@ class QuizControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.messages[0]").value("Request body contains invalid or unreadable values."));
+    }
+
+    private QuizQuestionResponse createOneQuestion(String mode) throws Exception {
+        String content = mockMvc.perform(post("/api/quizzes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "NOUN",
+                                  "mode": "%s",
+                                  "questionCount": 1
+                                }
+                                """.formatted(mode)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        return objectMapper.readValue(content, new TypeReference<List<QuizQuestionResponse>>() {
+        }).get(0);
+    }
+
+    private TestSession saveSession(Vocabulary correctVocabulary, Vocabulary selectedVocabulary, QuizMode mode) {
+        String questionId = UUID.randomUUID().toString();
+        String correctOptionId = UUID.randomUUID().toString();
+        String selectedOptionId = correctVocabulary.getId().equals(selectedVocabulary.getId())
+                ? correctOptionId
+                : UUID.randomUUID().toString();
+
+        Map<String, Long> optionVocabularyIds = new HashMap<>();
+        optionVocabularyIds.put(correctOptionId, correctVocabulary.getId());
+        optionVocabularyIds.put(selectedOptionId, selectedVocabulary.getId());
+
+        sessionStore.save(new QuizQuestionSession(
+                questionId,
+                correctVocabulary.getId(),
+                mode,
+                Map.copyOf(optionVocabularyIds),
+                correctOptionId,
+                mode == QuizMode.WORD_TO_MEANING ? correctVocabulary.getMeaning() : correctVocabulary.getWord(),
+                sessionStore.expiresAt()
+        ));
+
+        return new TestSession(questionId, selectedOptionId);
+    }
+
+    private record TestSession(String questionId, String selectedOptionId) {
     }
 }

@@ -3,6 +3,7 @@ package com.koreanvocabquiz.common;
 import java.util.List;
 
 import com.koreanvocabquiz.quiz.QuizGenerationException;
+import com.koreanvocabquiz.quiz.QuizSubmissionException;
 import com.koreanvocabquiz.vocabulary.InvalidCsvException;
 
 import org.springframework.http.HttpStatus;
@@ -53,6 +54,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(QuizGenerationException.class)
     public ResponseEntity<ApiErrorResponse> handleQuizGeneration(QuizGenerationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        List.of(exception.getMessage())
+                ));
+    }
+
+    @ExceptionHandler(QuizSubmissionException.class)
+    public ResponseEntity<ApiErrorResponse> handleQuizSubmission(QuizSubmissionException exception) {
         return ResponseEntity.badRequest()
                 .body(ApiErrorResponse.of(
                         HttpStatus.BAD_REQUEST.value(),
