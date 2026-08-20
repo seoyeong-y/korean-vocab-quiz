@@ -9,6 +9,7 @@ import java.util.Map;
 import com.koreanvocabquiz.common.ResourceNotFoundException;
 import com.koreanvocabquiz.vocabulary.Vocabulary;
 import com.koreanvocabquiz.vocabulary.VocabularyRepository;
+import com.koreanvocabquiz.wronganswer.WrongAnswerService;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,21 +21,27 @@ public class QuizService {
     private static final int OPTION_COUNT = 4;
 
     private final VocabularyRepository vocabularyRepository;
+    private final WrongAnswerService wrongAnswerService;
 
-    public QuizService(VocabularyRepository vocabularyRepository) {
+    public QuizService(VocabularyRepository vocabularyRepository, WrongAnswerService wrongAnswerService) {
         this.vocabularyRepository = vocabularyRepository;
+        this.wrongAnswerService = wrongAnswerService;
     }
 
     public List<QuizQuestionResponse> create(QuizCreateRequest request) {
         List<Vocabulary> vocabularies = vocabularyRepository.findByCategory(request.category());
 
+        return createFromVocabularies(vocabularies, request.mode(), request.questionCount());
+    }
+
+    public List<QuizQuestionResponse> createFromVocabularies(List<Vocabulary> vocabularies, QuizMode mode, int questionCount) {
         if (vocabularies.size() < OPTION_COUNT) {
             throw new QuizGenerationException("At least 4 vocabularies are required in the category to create multiple-choice quizzes.");
         }
-        if (request.questionCount() > vocabularies.size()) {
+        if (questionCount > vocabularies.size()) {
             throw new QuizGenerationException("questionCount cannot be greater than the number of vocabularies in the category.");
         }
-        if (distinctAnswerCount(vocabularies, request.mode()) < OPTION_COUNT) {
+        if (distinctAnswerCount(vocabularies, mode) < OPTION_COUNT) {
             throw new QuizGenerationException("At least 4 different option texts are required in the category.");
         }
 
@@ -42,11 +49,12 @@ public class QuizService {
         Collections.shuffle(questions);
 
         return questions.stream()
-                .limit(request.questionCount())
-                .map(vocabulary -> createQuestion(vocabulary, vocabularies, request.mode()))
+                .limit(questionCount)
+                .map(vocabulary -> createQuestion(vocabulary, vocabularies, mode))
                 .toList();
     }
 
+    @Transactional
     public QuizSubmitResponse submit(QuizSubmitRequest request) {
         Vocabulary correctVocabulary = vocabularyRepository.findById(request.vocabularyId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vocabulary not found. id=" + request.vocabularyId()));
@@ -55,6 +63,12 @@ public class QuizService {
 
         String correctAnswer = answerText(correctVocabulary, request.mode());
         boolean correct = correctAnswer.equals(answerText(selectedVocabulary, request.mode()));
+
+        if (request.wrongAnswerReview()) {
+            wrongAnswerService.handleReviewSubmission(correctVocabulary, request.mode(), correct);
+        } else if (!correct) {
+            wrongAnswerService.recordWrongAnswer(correctVocabulary, request.mode());
+        }
 
         return new QuizSubmitResponse(correct, correctAnswer, correctVocabulary.getId());
     }

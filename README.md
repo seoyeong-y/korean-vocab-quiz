@@ -118,6 +118,10 @@ npm run build
 | `POST` | `/api/vocabularies/csv` | CSV 어휘 대량 등록 |
 | `POST` | `/api/quizzes` | 퀴즈 생성 |
 | `POST` | `/api/quizzes/submit` | 정답 제출 |
+| `GET` | `/api/wrong-answers` | 오답 목록 조회 |
+| `POST` | `/api/wrong-answers/quizzes` | 오답 복습 퀴즈 생성 |
+| `DELETE` | `/api/wrong-answers/{id}` | 오답 개별 삭제 |
+| `DELETE` | `/api/wrong-answers` | 오답 전체 삭제 |
 
 Request body:
 
@@ -284,7 +288,8 @@ curl -X POST http://localhost:8080/api/quizzes/submit \
   -d '{
     "vocabularyId": 1,
     "mode": "WORD_TO_MEANING",
-    "selectedOptionId": 1
+    "selectedOptionId": 1,
+    "wrongAnswerReview": false
   }'
 ```
 
@@ -306,6 +311,80 @@ Quiz error cases:
 - 존재하지 않는 category 또는 mode는 400 응답으로 처리됩니다.
 - 정답 제출 시 클라이언트의 정답 여부는 신뢰하지 않고 서버의 Vocabulary 데이터를 기준으로 판정합니다.
 
+## Wrong Answer Review
+
+일반 퀴즈에서 오답을 제출하면 서버가 정답 판정 결과를 기준으로 해당 Vocabulary를 오답 목록에 자동 저장합니다.
+클라이언트가 보낸 정답 여부 값은 사용하지 않습니다.
+
+Wrong answer storage rules:
+
+- 오답은 `vocabularyId + quizMode` 조합으로 관리합니다.
+- 같은 `vocabularyId + quizMode` 오답이 이미 있으면 새 row를 만들지 않고 `wrongCount`를 1 증가시키고 `lastWrongAt`을 갱신합니다.
+- 일반 퀴즈에서 정답을 맞힌 경우 기존 오답 목록은 변경하지 않습니다.
+- 오답 복습에서 정답을 맞히면 해당 `vocabularyId + quizMode` 오답 데이터를 삭제합니다.
+- 오답 복습에서 다시 틀리면 일반 오답과 동일하게 `wrongCount`를 증가시키고 `lastWrongAt`을 갱신합니다.
+- 현재 정책은 오답 복습에서 1회 정답 시 제거입니다.
+
+List wrong answers:
+
+```bash
+curl http://localhost:8080/api/wrong-answers
+```
+
+Wrong answer response example:
+
+```json
+[
+  {
+    "id": 1,
+    "vocabularyId": 10,
+    "word": "가람",
+    "meaning": "강",
+    "category": "NATIVE_KOREAN",
+    "quizMode": "WORD_TO_MEANING",
+    "wrongCount": 2,
+    "lastWrongAt": "2026-08-21T10:30:00"
+  }
+]
+```
+
+Create wrong answer review quiz:
+
+```bash
+curl -X POST http://localhost:8080/api/wrong-answers/quizzes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "WORD_TO_MEANING",
+    "questionCount": 4
+  }'
+```
+
+Submit a review answer:
+
+```bash
+curl -X POST http://localhost:8080/api/quizzes/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vocabularyId": 10,
+    "mode": "WORD_TO_MEANING",
+    "selectedOptionId": 12,
+    "wrongAnswerReview": true
+  }'
+```
+
+Delete wrong answers:
+
+```bash
+curl -X DELETE http://localhost:8080/api/wrong-answers/1
+curl -X DELETE http://localhost:8080/api/wrong-answers
+```
+
+Wrong answer review error cases:
+
+- 오답 목록이 없으면 복습 퀴즈를 생성할 수 없습니다.
+- 선택한 quiz mode의 오답 어휘가 4개 미만이면 4지선다 복습 퀴즈를 생성할 수 없습니다.
+- `questionCount`가 출제 가능한 오답 어휘 수보다 크면 생성할 수 없습니다.
+
 ## Current Scope
 
 Implemented in this setup:
@@ -319,11 +398,11 @@ Implemented in this setup:
 - Vocabulary CSV upload
 - Quiz generation API
 - Quiz answer submission API
+- Frontend quiz UI
+- Wrong-answer storage and review
 
 Not implemented yet:
 
-- Frontend quiz UI
-- Wrong-answer storage or review
 - User accounts
 - Authentication or authorization
 - AWS resource creation or deployment
