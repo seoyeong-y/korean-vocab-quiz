@@ -12,7 +12,12 @@ public record VocabularyCreateRequest(
         @Size(max = 500)
         String meaning,
 
+        VocabularyCategory category,
+
         @Size(max = 1000)
         String exampleSentence
 ) {
+    public VocabularyCategory resolvedCategory() {
+        return category == null ? VocabularyCategory.GENERAL : category;
+    }
 }

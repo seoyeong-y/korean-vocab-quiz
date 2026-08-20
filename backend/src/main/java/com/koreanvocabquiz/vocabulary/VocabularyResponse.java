@@ -6,6 +6,7 @@ public record VocabularyResponse(
         Long id,
         String word,
         String meaning,
+        VocabularyCategory category,
         String exampleSentence,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
@@ -15,6 +16,7 @@ public record VocabularyResponse(
                 vocabulary.getId(),
                 vocabulary.getWord(),
                 vocabulary.getMeaning(),
+                vocabulary.getCategory(),
                 vocabulary.getExampleSentence(),
                 vocabulary.getCreatedAt(),
                 vocabulary.getUpdatedAt()
