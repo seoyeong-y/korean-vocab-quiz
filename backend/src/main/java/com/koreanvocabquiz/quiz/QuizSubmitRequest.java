@@ -1,16 +1,13 @@
 package com.koreanvocabquiz.quiz;
 
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 
 public record QuizSubmitRequest(
-        @NotNull
-        Long vocabularyId,
+        @NotBlank
+        String questionId,
 
-        @NotNull
-        QuizMode mode,
-
-        @NotNull
-        Long selectedOptionId,
+        @NotBlank
+        String selectedOptionId,
 
         boolean wrongAnswerReview
 ) {

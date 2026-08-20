@@ -175,8 +175,7 @@ function App() {
 
     try {
       const result = await submitQuizAnswer({
-        vocabularyId: currentQuestion.vocabularyId,
-        mode: currentQuestion.mode,
+        questionId: currentQuestion.questionId,
         selectedOptionId: option.optionId,
         wrongAnswerReview: quizType === 'review',
       });
@@ -642,6 +641,12 @@ function normalizeError(message) {
   }
   if (message.includes('No wrong answers')) {
     return '복습할 오답이 없습니다.';
+  }
+  if (message.includes('Question is not valid or has expired')) {
+    return '문제 정보가 만료되었습니다. 퀴즈를 다시 시작해 주세요.';
+  }
+  if (message.includes('Selected option is not included')) {
+    return '현재 문제의 선택지가 아닙니다. 퀴즈를 다시 시작해 주세요.';
   }
   if (message.includes('questionCount')) {
     return '문제 수가 출제 가능한 어휘 수보다 많습니다.';
