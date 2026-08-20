@@ -115,6 +115,7 @@ npm run build
 | `GET` | `/api/vocabularies/{id}` | 어휘 단건 조회 |
 | `PUT` | `/api/vocabularies/{id}` | 어휘 수정 |
 | `DELETE` | `/api/vocabularies/{id}` | 어휘 삭제 |
+| `POST` | `/api/vocabularies/csv` | CSV 어휘 대량 등록 |
 
 Request body:
 
@@ -122,7 +123,82 @@ Request body:
 {
   "word": "가교",
   "meaning": "둘 사이를 이어 주는 것",
+  "category": "GENERAL",
   "exampleSentence": "그는 양국 협력의 가교 역할을 했다."
+}
+```
+
+`category`를 생략하면 `GENERAL`로 저장됩니다.
+
+Available categories:
+
+```text
+GENERAL
+NOUN
+VERB
+ADJECTIVE
+ADVERB
+IDIOM
+```
+
+## Vocabulary CSV Upload
+
+CSV upload endpoint:
+
+```bash
+curl -X POST http://localhost:8080/api/vocabularies/csv \
+  -F "file=@vocabularies.csv"
+```
+
+CSV format:
+
+```csv
+word,meaning,category
+가교,둘 사이를 이어 주는 것,GENERAL
+간과하다,대충 보아 넘기다,VERB
+```
+
+Required columns:
+
+- `word`
+- `meaning`
+- `category`
+
+Processing rules:
+
+- New valid rows are saved and counted as `success`.
+- Rows with the same `word`, `meaning`, and `category` as existing DB data are not errors. They are counted as `skipped`.
+- Duplicate rows in the same CSV upload are counted as `skipped`.
+- Rows missing `word`, `meaning`, or `category` are counted as `failed`.
+- Rows with a `category` that is not in `VocabularyCategory` are counted as `failed`.
+- Each failed row includes `rowNumber` and `reason`.
+- Skipped rows also include `rowNumber` and `reason`.
+- `successCount + skippedCount + failedCount = totalCount`.
+
+Response example:
+
+```json
+{
+  "totalCount": 4,
+  "successCount": 1,
+  "skippedCount": 1,
+  "failedCount": 2,
+  "skippedRows": [
+    {
+      "rowNumber": 2,
+      "reason": "Already exists with the same word, meaning, and category."
+    }
+  ],
+  "failedRows": [
+    {
+      "rowNumber": 3,
+      "reason": "word is required"
+    },
+    {
+      "rowNumber": 4,
+      "reason": "category must be one of [GENERAL, NOUN, VERB, ADJECTIVE, ADVERB, IDIOM]"
+    }
+  ]
 }
 ```
 
@@ -136,10 +212,10 @@ Implemented in this setup:
 - Docker Compose configuration for frontend, backend, and MySQL
 - Environment variable based database configuration
 - Vocabulary entity and CRUD API
+- Vocabulary CSV upload
 
 Not implemented yet:
 
-- CSV upload
 - Quiz generation
 - Answer checking
 - Wrong-answer storage or review

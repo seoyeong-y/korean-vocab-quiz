@@ -2,6 +2,8 @@ package com.koreanvocabquiz.common;
 
 import java.util.List;
 
+import com.koreanvocabquiz.vocabulary.InvalidCsvException;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -34,6 +36,16 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST.value(),
                         HttpStatus.BAD_REQUEST.getReasonPhrase(),
                         messages
+                ));
+    }
+
+    @ExceptionHandler(InvalidCsvException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidCsv(InvalidCsvException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        List.of(exception.getMessage())
                 ));
     }
 }

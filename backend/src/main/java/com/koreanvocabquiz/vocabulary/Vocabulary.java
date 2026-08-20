@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -25,6 +27,10 @@ public class Vocabulary {
     @Column(nullable = false, length = 500)
     private String meaning;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private VocabularyCategory category;
+
     @Column(name = "example_sentence", length = 1000)
     private String exampleSentence;
 
@@ -38,8 +44,13 @@ public class Vocabulary {
     }
 
     public Vocabulary(String word, String meaning, String exampleSentence) {
+        this(word, meaning, VocabularyCategory.GENERAL, exampleSentence);
+    }
+
+    public Vocabulary(String word, String meaning, VocabularyCategory category, String exampleSentence) {
         this.word = word;
         this.meaning = meaning;
+        this.category = category;
         this.exampleSentence = exampleSentence;
     }
 
@@ -55,9 +66,10 @@ public class Vocabulary {
         updatedAt = LocalDateTime.now();
     }
 
-    public void update(String word, String meaning, String exampleSentence) {
+    public void update(String word, String meaning, VocabularyCategory category, String exampleSentence) {
         this.word = word;
         this.meaning = meaning;
+        this.category = category;
         this.exampleSentence = exampleSentence;
     }
 
@@ -71,6 +83,10 @@ public class Vocabulary {
 
     public String getMeaning() {
         return meaning;
+    }
+
+    public VocabularyCategory getCategory() {
+        return category;
     }
 
     public String getExampleSentence() {
