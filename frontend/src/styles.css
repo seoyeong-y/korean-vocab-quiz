@@ -69,7 +69,7 @@ input:focus-visible {
 
 .start-panel,
 .result-panel {
-  max-width: 760px;
+  max-width: 780px;
 }
 
 .quiz-panel {
@@ -83,6 +83,10 @@ input:focus-visible {
 .hero-copy,
 .screen-heading {
   margin-bottom: var(--space-6);
+}
+
+.start-panel .hero-copy {
+  margin-bottom: 28px;
 }
 
 .eyebrow {
@@ -112,6 +116,10 @@ h1 {
 .review-form {
   display: grid;
   gap: var(--space-5);
+}
+
+.start-panel .quiz-form {
+  gap: 22px;
 }
 
 .review-form {
@@ -206,6 +214,25 @@ legend small,
   line-height: 1.35;
 }
 
+.compact-choice {
+  align-items: center;
+  min-height: 56px;
+}
+
+.question-count-grid {
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: var(--space-3);
+}
+
+.custom-count-row {
+  align-items: end;
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
 .form-row {
   align-items: end;
   display: flex;
@@ -225,6 +252,12 @@ legend small,
   min-height: 48px;
   padding: 10px 12px;
   width: 150px;
+}
+
+.field-label input:disabled {
+  background: var(--color-surface-soft);
+  color: var(--color-muted);
+  cursor: not-allowed;
 }
 
 .field-hint {
@@ -247,6 +280,20 @@ legend small,
 
 .action-row {
   flex-wrap: wrap;
+}
+
+.start-action-row {
+  align-items: center;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-start;
+  margin-top: 2px;
+  padding-top: var(--space-5);
+}
+
+.start-action-row .primary-button {
+  min-width: 132px;
 }
 
 .toolbar {
@@ -612,6 +659,10 @@ dd {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .question-count-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .mode-group,
   .result-grid,
   .meta-list {
@@ -619,6 +670,8 @@ dd {
   }
 
   .form-row,
+  .custom-count-row,
+  .start-action-row,
   .quiz-header,
   .screen-heading,
   .toolbar,
@@ -638,6 +691,10 @@ dd {
     width: 100%;
   }
 
+  .start-action-row .primary-button {
+    min-width: 0;
+  }
+
   .item-delete-button {
     width: 100%;
   }
@@ -655,6 +712,10 @@ dd {
   }
 
   .category-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .question-count-grid {
     grid-template-columns: 1fr;
   }
 
