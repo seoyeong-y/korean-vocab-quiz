@@ -11,16 +11,16 @@ import {
 import './styles.css';
 
 const categories = [
-  { value: 'NATIVE_KOREAN', label: '고유어' },
-  { value: 'SINO_KOREAN', label: '한자어' },
-  { value: 'LOANWORD', label: '외래어' },
-  { value: 'PROVERB', label: '속담' },
-  { value: 'IDIOM', label: '관용어' },
+  { value: 'NATIVE_KOREAN', label: '고유어', description: '순우리말 어휘' },
+  { value: 'SINO_KOREAN', label: '한자어', description: '한자 기반 어휘' },
+  { value: 'LOANWORD', label: '외래어', description: '외국어 유래 어휘' },
+  { value: 'PROVERB', label: '속담', description: '관용적 교훈 표현' },
+  { value: 'IDIOM', label: '관용어', description: '굳어진 표현' },
 ];
 
 const quizModes = [
-  { value: 'WORD_TO_MEANING', label: '단어 보고 뜻 맞히기' },
-  { value: 'MEANING_TO_WORD', label: '뜻 보고 단어 맞히기' },
+  { value: 'WORD_TO_MEANING', label: '단어 보고 뜻 맞히기', shortLabel: '단어 → 뜻' },
+  { value: 'MEANING_TO_WORD', label: '뜻 보고 단어 맞히기', shortLabel: '뜻 → 단어' },
 ];
 
 const initialSettings = {
@@ -151,6 +151,12 @@ function App() {
   }
 
   async function handleDeleteAllWrongAnswers() {
+    const confirmed = window.confirm('오답노트의 모든 항목을 삭제할까요? 이 작업은 되돌릴 수 없습니다.');
+
+    if (!confirmed) {
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -290,16 +296,21 @@ function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongA
 
   return (
     <section className="panel start-panel" aria-labelledby="start-title">
-      <p className="eyebrow">KBS Korean Vocabulary Quiz</p>
-      <h1 id="start-title">어휘 퀴즈</h1>
-      <p className="description">
-        카테고리와 방식을 고른 뒤 한 문제씩 풀어보세요.
-      </p>
+      <header className="hero-copy">
+        <p className="eyebrow">KBS 한국어능력시험 어휘 학습</p>
+        <h1 id="start-title">어휘 퀴즈</h1>
+        <p className="description">
+          시험 어휘를 카테고리별로 고르고, 한 문제씩 차분하게 확인해 보세요.
+        </p>
+      </header>
 
       <form className="quiz-form" onSubmit={onStart}>
         <fieldset>
-          <legend>카테고리</legend>
-          <div className="option-grid">
+          <legend>
+            <span>카테고리</span>
+            <small>학습할 어휘 유형을 선택하세요.</small>
+          </legend>
+          <div className="option-grid category-grid">
             {categories.map((category) => (
               <label className="choice" key={category.value}>
                 <input
@@ -309,14 +320,20 @@ function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongA
                   value={category.value}
                   onChange={(event) => updateField('category', event.target.value)}
                 />
-                <span>{category.label}</span>
+                <span>
+                  <strong>{category.label}</strong>
+                  <small>{category.description}</small>
+                </span>
               </label>
             ))}
           </div>
         </fieldset>
 
         <fieldset>
-          <legend>퀴즈 모드</legend>
+          <legend>
+            <span>퀴즈 모드</span>
+            <small>문제를 읽는 방향을 선택하세요.</small>
+          </legend>
           <div className="mode-group">
             {quizModes.map((mode) => (
               <label className="choice" key={mode.value}>
@@ -327,35 +344,40 @@ function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongA
                   value={mode.value}
                   onChange={(event) => updateField('mode', event.target.value)}
                 />
-                <span>{mode.label}</span>
+                <span>
+                  <strong>{mode.shortLabel}</strong>
+                  <small>{mode.label}</small>
+                </span>
               </label>
             ))}
           </div>
         </fieldset>
 
-        <label className="field-label" htmlFor="question-count">
-          문제 수
-          <input
-            id="question-count"
-            min="1"
-            type="number"
-            value={settings.questionCount}
-            onChange={(event) => updateField('questionCount', event.target.value)}
-          />
-        </label>
+        <div className="form-row">
+          <label className="field-label" htmlFor="question-count">
+            <span>문제 수</span>
+            <input
+              id="question-count"
+              min="1"
+              type="number"
+              value={settings.questionCount}
+              onChange={(event) => updateField('questionCount', event.target.value)}
+            />
+          </label>
+          <span className="field-hint">선택한 카테고리의 어휘 수 안에서 출제됩니다.</span>
+        </div>
 
         {error && <ErrorMessage message={error} />}
 
-        <button className="primary-button" disabled={loading} type="submit">
-          {loading ? '퀴즈 로딩 중' : '퀴즈 시작'}
-        </button>
+        <div className="action-row">
+          <button className="primary-button" disabled={loading} type="submit">
+            {loading ? '퀴즈 로딩 중' : '퀴즈 시작'}
+          </button>
+          <button className="secondary-button" disabled={loading} type="button" onClick={onOpenWrongAnswers}>
+            오답노트 보기
+          </button>
+        </div>
       </form>
-
-      <div className="secondary-actions">
-        <button className="secondary-button" disabled={loading} type="button" onClick={onOpenWrongAnswers}>
-          오답 목록 보기
-        </button>
-      </div>
     </section>
   );
 }
@@ -383,11 +405,12 @@ function WrongAnswerScreen({
     <section className="panel wrong-answer-panel" aria-labelledby="wrong-answer-title">
       <div className="screen-heading">
         <div>
-          <p className="eyebrow">Wrong Answer Review</p>
-          <h1 id="wrong-answer-title">오답 목록</h1>
+          <p className="eyebrow">오답 복습</p>
+          <h1 id="wrong-answer-title">오답노트</h1>
+          <p className="screen-description">일반 퀴즈에서 틀린 어휘를 모아 다시 확인합니다.</p>
         </div>
         <button className="secondary-button" disabled={loading} type="button" onClick={onBack}>
-          돌아가기
+          처음 화면
         </button>
       </div>
 
@@ -398,7 +421,7 @@ function WrongAnswerScreen({
           새로고침
         </button>
         <button
-          className="danger-button"
+          className="danger-button quiet-danger"
           disabled={loading || items.length === 0}
           type="button"
           onClick={onDeleteAll}
@@ -420,7 +443,10 @@ function WrongAnswerScreen({
         <>
           <form className="review-form" onSubmit={onStartReview}>
             <fieldset>
-              <legend>복습 모드</legend>
+              <legend>
+                <span>복습 모드</span>
+                <small>틀렸던 방향 그대로 다시 풀어볼 수 있습니다.</small>
+              </legend>
               <div className="mode-group">
                 {quizModes.map((mode) => (
                   <label className="choice" key={mode.value}>
@@ -431,22 +457,28 @@ function WrongAnswerScreen({
                       value={mode.value}
                       onChange={(event) => updateField('mode', event.target.value)}
                     />
-                    <span>{mode.label}</span>
+                    <span>
+                      <strong>{mode.shortLabel}</strong>
+                      <small>{mode.label}</small>
+                    </span>
                   </label>
                 ))}
               </div>
             </fieldset>
 
-            <label className="field-label" htmlFor="review-question-count">
-              복습 문제 수
-              <input
-                id="review-question-count"
-                min="1"
-                type="number"
-                value={settings.questionCount}
-                onChange={(event) => updateField('questionCount', event.target.value)}
-              />
-            </label>
+            <div className="form-row">
+              <label className="field-label" htmlFor="review-question-count">
+                <span>복습 문제 수</span>
+                <input
+                  id="review-question-count"
+                  min="1"
+                  type="number"
+                  value={settings.questionCount}
+                  onChange={(event) => updateField('questionCount', event.target.value)}
+                />
+              </label>
+              <span className="field-hint">오답노트에 저장된 어휘를 기준으로 출제됩니다.</span>
+            </div>
 
             <button className="primary-button" disabled={loading} type="submit">
               {loading ? '복습 퀴즈 로딩 중' : '오답 복습 시작'}
@@ -457,7 +489,10 @@ function WrongAnswerScreen({
             {items.map((item) => (
               <article className="wrong-answer-item" key={item.id} role="listitem">
                 <div>
-                  <h2>{item.word}</h2>
+                  <div className="wrong-answer-word">
+                    <span className="category-badge">{categoryLabel(item.category)}</span>
+                    <h2>{item.word}</h2>
+                  </div>
                   <p>{item.meaning}</p>
                   <dl className="meta-list">
                     <div>
@@ -478,7 +513,7 @@ function WrongAnswerScreen({
                     </div>
                   </dl>
                 </div>
-                <button className="danger-button" disabled={loading} type="button" onClick={() => onDelete(item.id)}>
+                <button className="danger-button item-delete-button" disabled={loading} type="button" onClick={() => onDelete(item.id)}>
                   삭제
                 </button>
               </article>
@@ -506,15 +541,13 @@ function QuizScreen({
   return (
     <section className="panel quiz-panel" aria-labelledby="quiz-title">
       <div className="quiz-header">
-        <p className="question-count">
-          {currentIndex + 1} / {totalCount}
-        </p>
+        <p className="question-count">문제 {currentIndex + 1} / {totalCount}</p>
         <p className="mode-label">
           {quizType === 'review' ? '오답 복습' : '일반 퀴즈'} · {modeLabel(question.mode)}
         </p>
       </div>
 
-      <div className="progress-track" aria-label="진행률">
+      <div className="progress-track" aria-label={`진행률 ${Math.round(progress)}%`}>
         <div className="progress-bar" style={{ width: `${progress}%` }} />
       </div>
 
@@ -523,7 +556,7 @@ function QuizScreen({
       </h1>
 
       <div className="options" role="list">
-        {question.options.map((option) => (
+        {question.options.map((option, optionIndex) => (
           <button
             className={optionClassName(option, selectedOptionId, feedback)}
             disabled={Boolean(feedback) || submitting}
@@ -531,7 +564,10 @@ function QuizScreen({
             type="button"
             onClick={() => onSelectOption(option)}
           >
-            {option.text}
+            <span className="option-marker" aria-hidden="true">
+              {optionFeedbackLabel(option, optionIndex, selectedOptionId, feedback)}
+            </span>
+            <span>{option.text}</span>
           </button>
         ))}
       </div>
@@ -539,7 +575,7 @@ function QuizScreen({
       {submitting && <p className="status-message">정답 확인 중</p>}
       {error && <ErrorMessage message={error} />}
       {feedback && (
-        <div className={feedback.correct ? 'feedback correct' : 'feedback incorrect'}>
+        <div className={feedback.correct ? 'feedback correct' : 'feedback incorrect'} aria-live="polite">
           <strong>{feedback.correct ? '정답입니다.' : '오답입니다.'}</strong>
           {!feedback.correct && <span>정답: {feedback.correctAnswer}</span>}
         </div>
@@ -562,6 +598,10 @@ function ResultScreen({ totalCount, correctCount, incorrectCount, accuracy, quiz
     <section className="panel result-panel" aria-labelledby="result-title">
       <p className="eyebrow">{quizType === 'review' ? 'Review Result' : 'Quiz Result'}</p>
       <h1 id="result-title">결과</h1>
+      <p className="result-score">{accuracy}%</p>
+      <p className="screen-description">
+        {quizType === 'review' ? '오답 복습을 완료했습니다.' : '퀴즈 풀이를 완료했습니다.'}
+      </p>
 
       <dl className="result-grid">
         <div>
@@ -582,14 +622,17 @@ function ResultScreen({ totalCount, correctCount, incorrectCount, accuracy, quiz
         </div>
       </dl>
 
-      <button className="primary-button" type="button" onClick={onRetry}>
-        다시 풀기
-      </button>
-      {quizType === 'review' && (
-        <button className="secondary-button result-secondary-button" type="button" onClick={onWrongAnswers}>
-          오답 목록으로
+      <div className="action-row result-actions">
+        <button className="primary-button" type="button" onClick={onRetry}>
+          다시 풀기
         </button>
-      )}
+        <button className="secondary-button" type="button" onClick={onRetry}>
+          처음 화면
+        </button>
+        <button className="secondary-button" type="button" onClick={onWrongAnswers}>
+          오답노트 보기
+        </button>
+      </div>
     </section>
   );
 }
@@ -633,6 +676,22 @@ function optionClassName(option, selectedOptionId, feedback) {
   }
 
   return classNames.join(' ');
+}
+
+function optionFeedbackLabel(option, optionIndex, selectedOptionId, feedback) {
+  if (!feedback) {
+    return optionIndex + 1;
+  }
+
+  if (option.text === feedback.correctAnswer) {
+    return '정답';
+  }
+
+  if (selectedOptionId === option.optionId && !feedback.correct) {
+    return '선택';
+  }
+
+  return optionIndex + 1;
 }
 
 function normalizeError(message) {
