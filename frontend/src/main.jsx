@@ -23,6 +23,8 @@ const quizModes = [
   { value: 'MEANING_TO_WORD', label: '뜻 보고 단어 맞히기', shortLabel: '뜻 → 단어' },
 ];
 
+const questionCountPresets = [5, 10, 20];
+
 const initialSettings = {
   category: 'NATIVE_KOREAN',
   mode: 'WORD_TO_MEANING',
@@ -287,11 +289,25 @@ function App() {
 }
 
 function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongAnswers }) {
+  const questionCountValue = Number(settings.questionCount);
+  const selectedQuestionCountOption = questionCountPresets.includes(questionCountValue)
+    ? String(questionCountValue)
+    : 'custom';
+
   function updateField(field, value) {
     onChange({
       ...settings,
       [field]: value,
     });
+  }
+
+  function updateQuestionCountOption(value) {
+    if (value === 'custom') {
+      updateField('questionCount', questionCountPresets.includes(questionCountValue) ? '' : settings.questionCount);
+      return;
+    }
+
+    updateField('questionCount', value);
   }
 
   return (
@@ -353,23 +369,62 @@ function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongA
           </div>
         </fieldset>
 
-        <div className="form-row">
-          <label className="field-label" htmlFor="question-count">
+        <fieldset>
+          <legend>
             <span>문제 수</span>
-            <input
-              id="question-count"
-              min="1"
-              type="number"
-              value={settings.questionCount}
-              onChange={(event) => updateField('questionCount', event.target.value)}
-            />
-          </label>
-          <span className="field-hint">선택한 카테고리의 어휘 수 안에서 출제됩니다.</span>
-        </div>
+            <small>자주 쓰는 문제 수를 빠르게 선택하세요.</small>
+          </legend>
+          <div className="question-count-grid">
+            {questionCountPresets.map((count) => (
+              <label className="choice compact-choice" key={count}>
+                <input
+                  checked={selectedQuestionCountOption === String(count)}
+                  name="question-count-option"
+                  type="radio"
+                  value={count}
+                  onChange={(event) => updateQuestionCountOption(event.target.value)}
+                />
+                <span>
+                  <strong>{count}문제</strong>
+                </span>
+              </label>
+            ))}
+
+            <label className="choice compact-choice">
+              <input
+                checked={selectedQuestionCountOption === 'custom'}
+                name="question-count-option"
+                type="radio"
+                value="custom"
+                onChange={(event) => updateQuestionCountOption(event.target.value)}
+              />
+              <span>
+                <strong>직접 입력</strong>
+              </span>
+            </label>
+          </div>
+
+          <div className="custom-count-row">
+            <label className="field-label" htmlFor="question-count">
+              <span>직접 입력 문제 수</span>
+              <input
+                disabled={selectedQuestionCountOption !== 'custom'}
+                id="question-count"
+                min="1"
+                placeholder="예: 12"
+                required={selectedQuestionCountOption === 'custom'}
+                type="number"
+                value={selectedQuestionCountOption === 'custom' ? settings.questionCount : ''}
+                onChange={(event) => updateField('questionCount', event.target.value)}
+              />
+            </label>
+            <span className="field-hint">선택한 카테고리의 어휘 수 안에서 출제됩니다.</span>
+          </div>
+        </fieldset>
 
         {error && <ErrorMessage message={error} />}
 
-        <div className="action-row">
+        <div className="start-action-row">
           <button className="primary-button" disabled={loading} type="submit">
             {loading ? '퀴즈 로딩 중' : '퀴즈 시작'}
           </button>
