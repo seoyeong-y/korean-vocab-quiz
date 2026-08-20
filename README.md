@@ -30,7 +30,7 @@ korean-vocab-quiz/
 | --- | --- |
 | Frontend | http://localhost:5173 |
 | Backend | http://localhost:8080 |
-| MySQL | localhost:3306 |
+| MySQL | localhost:3307 |
 
 ## Environment Variables
 
@@ -49,6 +49,7 @@ MYSQL_DATABASE
 MYSQL_USER
 MYSQL_PASSWORD
 MYSQL_ROOT_PASSWORD
+MYSQL_PORT
 SPRING_PROFILES_ACTIVE
 SPRING_DATASOURCE_URL
 SPRING_DATASOURCE_USERNAME
