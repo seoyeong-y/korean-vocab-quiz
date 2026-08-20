@@ -34,3 +34,26 @@ export function submitQuizAnswer(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+export function getWrongAnswers() {
+  return request('/api/wrong-answers');
+}
+
+export function createWrongAnswerReviewQuiz(payload) {
+  return request('/api/wrong-answers/quizzes', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteWrongAnswer(id) {
+  return request(`/api/wrong-answers/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export function deleteAllWrongAnswers() {
+  return request('/api/wrong-answers', {
+    method: 'DELETE',
+  });
+}

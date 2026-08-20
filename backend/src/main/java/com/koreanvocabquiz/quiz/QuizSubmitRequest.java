@@ -10,6 +10,8 @@ public record QuizSubmitRequest(
         QuizMode mode,
 
         @NotNull
-        Long selectedOptionId
+        Long selectedOptionId,
+
+        boolean wrongAnswerReview
 ) {
 }
