@@ -135,12 +135,16 @@ Request body:
 Available categories:
 
 ```text
+NATIVE_KOREAN
+SINO_KOREAN
+LOANWORD
+PROVERB
+IDIOM
 GENERAL
 NOUN
 VERB
 ADJECTIVE
 ADVERB
-IDIOM
 ```
 
 ## Vocabulary CSV Upload
@@ -156,8 +160,8 @@ CSV format:
 
 ```csv
 word,meaning,category
-가교,둘 사이를 이어 주는 것,GENERAL
-간과하다,대충 보아 넘기다,VERB
+가람,강,NATIVE_KOREAN
+간과하다,대충 보아 넘기다,SINO_KOREAN
 ```
 
 Required columns:
@@ -198,7 +202,7 @@ Response example:
     },
     {
       "rowNumber": 4,
-      "reason": "category must be one of [GENERAL, NOUN, VERB, ADJECTIVE, ADVERB, IDIOM]"
+      "reason": "category must be one of [NATIVE_KOREAN, SINO_KOREAN, LOANWORD, PROVERB, IDIOM, GENERAL, NOUN, VERB, ADJECTIVE, ADVERB]"
     }
   ]
 }
@@ -222,7 +226,7 @@ Create quiz:
 curl -X POST http://localhost:8080/api/quizzes \
   -H "Content-Type: application/json" \
   -d '{
-    "category": "NOUN",
+    "category": "NATIVE_KOREAN",
     "mode": "WORD_TO_MEANING",
     "questionCount": 2
   }'
@@ -231,6 +235,7 @@ curl -X POST http://localhost:8080/api/quizzes \
 Quiz generation rules:
 
 - `category`는 `VocabularyCategory` 값 중 하나여야 합니다.
+- 프론트엔드 기본 퀴즈 화면은 `NATIVE_KOREAN`, `SINO_KOREAN`, `LOANWORD`, `PROVERB`, `IDIOM`을 고유어, 한자어, 외래어, 속담, 관용어로 표시합니다.
 - `questionCount`는 1 이상이어야 합니다.
 - 선택한 category의 어휘에서 랜덤으로 문제를 생성합니다.
 - 같은 퀴즈 세트 안에서 동일한 `vocabularyId`는 중복 출제되지 않습니다.
