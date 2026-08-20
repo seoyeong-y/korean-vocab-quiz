@@ -1,6 +1,6 @@
 # KBS Korean Vocabulary Quiz
 
-KBS한국어능력시험 대비용 개인 어휘 학습 웹사이트입니다. 현재 PR 1 단계에서는 기능 구현이 아니라 Spring Boot, React, MySQL, Docker Compose 기반의 프로젝트 실행 환경만 구성합니다.
+KBS한국어능력시험 대비용 개인 어휘 학습 웹사이트입니다.
 
 ## Tech Stack
 
@@ -92,12 +92,38 @@ Backend build using Docker:
 docker build -t korean-vocab-backend ./backend
 ```
 
+Backend test using Docker:
+
+```bash
+docker run --rm -v "$PWD/backend":/app -w /app maven:3.9-eclipse-temurin-17 mvn test
+```
+
 Frontend build:
 
 ```bash
 cd frontend
 npm install
 npm run build
+```
+
+## Vocabulary API
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/api/vocabularies` | 어휘 생성 |
+| `GET` | `/api/vocabularies` | 어휘 목록 조회 |
+| `GET` | `/api/vocabularies/{id}` | 어휘 단건 조회 |
+| `PUT` | `/api/vocabularies/{id}` | 어휘 수정 |
+| `DELETE` | `/api/vocabularies/{id}` | 어휘 삭제 |
+
+Request body:
+
+```json
+{
+  "word": "가교",
+  "meaning": "둘 사이를 이어 주는 것",
+  "exampleSentence": "그는 양국 협력의 가교 역할을 했다."
+}
 ```
 
 ## Current Scope
@@ -109,10 +135,10 @@ Implemented in this setup:
 - Dockerfiles for backend and frontend
 - Docker Compose configuration for frontend, backend, and MySQL
 - Environment variable based database configuration
+- Vocabulary entity and CRUD API
 
 Not implemented yet:
 
-- Vocabulary entity or CRUD
 - CSV upload
 - Quiz generation
 - Answer checking
