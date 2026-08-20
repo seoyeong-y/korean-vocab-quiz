@@ -4,8 +4,8 @@
 
 - `main`: 실제 배포 가능한 안정 버전입니다.
 - `develop`: 개발 내용을 통합하는 브랜치입니다.
-- `feat/<issue-number>-<description>`: 기능 개발 브랜치입니다.
-- `fix/<issue-number>-<description>`: 버그 수정 브랜치입니다.
+- `feat/#<issue-number>`: 기능 개발 브랜치입니다.
+- `fix/#<issue-number>`: 버그 수정 브랜치입니다.
 
 The initial project setup can exist on both `main` and `develop` as the shared repository foundation.
 After this setup, do not develop feature code directly on `main` or `develop`.
@@ -16,13 +16,15 @@ For meaningful feature work, project configuration work after the initial setup,
 
 1. Create a GitHub Issue before starting work.
 2. Create a working branch from `develop` using the Issue number.
-3. Use `feat/<issue-number>-<description>` for feature work.
-4. Use `fix/<issue-number>-<description>` for bug fixes.
+3. Use `feat/#<issue-number>` for feature work.
+4. Use `fix/#<issue-number>` for bug fixes.
 5. Commit only on the working branch.
 6. Push the working branch to origin.
 7. Open a Pull Request with `develop` as the base branch.
 8. Link the PR to the Issue in the PR body.
 9. Do not merge the PR; the repository owner reviews and merges.
+
+Do not append a feature name or description to Issue based branch names.
 
 Only create a `develop` to `main` Pull Request when preparing an actual deployment.
 Very small typo fixes may be handled without a separate Issue.
