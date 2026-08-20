@@ -2,10 +2,12 @@ package com.koreanvocabquiz.common;
 
 import java.util.List;
 
+import com.koreanvocabquiz.quiz.QuizGenerationException;
 import com.koreanvocabquiz.vocabulary.InvalidCsvException;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -46,6 +48,26 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST.value(),
                         HttpStatus.BAD_REQUEST.getReasonPhrase(),
                         List.of(exception.getMessage())
+                ));
+    }
+
+    @ExceptionHandler(QuizGenerationException.class)
+    public ResponseEntity<ApiErrorResponse> handleQuizGeneration(QuizGenerationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        List.of(exception.getMessage())
+                ));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleHttpMessageNotReadable(HttpMessageNotReadableException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        List.of("Request body contains invalid or unreadable values.")
                 ));
     }
 }
