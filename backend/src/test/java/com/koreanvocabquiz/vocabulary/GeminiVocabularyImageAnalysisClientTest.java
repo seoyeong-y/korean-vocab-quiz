@@ -1,6 +1,8 @@
 package com.koreanvocabquiz.vocabulary;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -18,6 +20,27 @@ class GeminiVocabularyImageAnalysisClientTest {
             "test-key",
             "gemini-2.5-flash"
     );
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void createRequestBodyUsesStrictVisibleTextPrompt() {
+        Map<String, Object> requestBody = client.createRequestBody(List.of(
+                new VocabularyImageFile(1, "image/jpeg", "image".getBytes(StandardCharsets.UTF_8))
+        ));
+
+        List<Map<String, Object>> contents = (List<Map<String, Object>>) requestBody.get("contents");
+        List<Map<String, Object>> parts = (List<Map<String, Object>>) contents.get(0).get("parts");
+        String prompt = (String) parts.get(0).get("text");
+
+        assertThat(prompt).contains(
+                "Read only the text visibly present in the image.",
+                "Do not add, infer, complete, correct, paraphrase, or supplement any word or meaning using outside knowledge.",
+                "Do not replace or improve meanings with dictionary definitions.",
+                "If text is unclear, blurred, cut off, or partially hidden, do not guess.",
+                "Omit uncertain content or mark it as needsReview.",
+                "Missing uncertain content is better than creating incorrect content."
+        );
+    }
 
     @Test
     void parseStructuredOutputResponse() {

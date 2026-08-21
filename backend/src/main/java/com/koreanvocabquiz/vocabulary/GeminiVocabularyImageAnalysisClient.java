@@ -67,15 +67,22 @@ public class GeminiVocabularyImageAnalysisClient implements VocabularyImageAnaly
                 .toUriString();
     }
 
-    private Map<String, Object> createRequestBody(List<VocabularyImageFile> images) {
+    Map<String, Object> createRequestBody(List<VocabularyImageFile> images) {
         List<Map<String, Object>> parts = new ArrayList<>();
         parts.add(Map.of(
                 "text", """
-                        Extract only target vocabulary entries from these Korean study material images.
-                        Return word, meaning, category, needsReview, confidence, and imageNumber.
+                        Extract target vocabulary entries from Korean study material images.
+                        Read only the text visibly present in the image.
+                        Do not add, infer, complete, correct, paraphrase, or supplement any word or meaning using outside knowledge.
+                        Keep word and meaning as close to the visible original text as possible.
+                        Do not replace or improve meanings with dictionary definitions.
+                        If text is unclear, blurred, cut off, or partially hidden, do not guess.
+                        Omit uncertain content or mark it as needsReview.
+                        Missing uncertain content is better than creating incorrect content.
+                        Return only word, meaning, category, needsReview, confidence, and imageNumber.
                         Exclude problem numbers, page numbers, unit titles, examples, explanatory sentences, headers, and non-target descriptions.
                         Categories must be one of NATIVE_KOREAN, SINO_KOREAN, LOANWORD, PROVERB, IDIOM.
-                        If classification is uncertain, choose the closest category, set needsReview true, and lower confidence.
+                        Category may be classified by AI. If classification is uncertain, choose the closest category, set needsReview true, and lower confidence.
                         """
         ));
 
