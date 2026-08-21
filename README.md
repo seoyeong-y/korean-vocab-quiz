@@ -156,6 +156,7 @@ SINO_KOREAN
 LOANWORD
 PROVERB
 IDIOM
+FOUR_CHARACTER_IDIOM
 GENERAL
 NOUN
 VERB
@@ -218,7 +219,7 @@ Response example:
     },
     {
       "rowNumber": 4,
-      "reason": "category must be one of [NATIVE_KOREAN, SINO_KOREAN, LOANWORD, PROVERB, IDIOM, GENERAL, NOUN, VERB, ADJECTIVE, ADVERB]"
+      "reason": "category must be one of [NATIVE_KOREAN, SINO_KOREAN, LOANWORD, PROVERB, IDIOM, FOUR_CHARACTER_IDIOM, GENERAL, NOUN, VERB, ADJECTIVE, ADVERB]"
     }
   ]
 }
@@ -261,6 +262,7 @@ AI category classification:
 - `LOANWORD`: 외래어
 - `PROVERB`: 속담
 - `IDIOM`: 관용어
+- `FOUR_CHARACTER_IDIOM`: 사자성어
 
 AI가 분류를 확신하기 어려운 항목은 `needsReview: true`로 표시됩니다.
 그래도 DB 저장 시점에는 관리자가 최종적으로 위 카테고리 중 하나를 선택해야 합니다.
@@ -352,7 +354,7 @@ curl -X POST http://localhost:8080/api/quizzes \
 Quiz generation rules:
 
 - `category`는 `VocabularyCategory` 값 중 하나여야 합니다.
-- 프론트엔드 기본 퀴즈 화면은 `NATIVE_KOREAN`, `SINO_KOREAN`, `LOANWORD`, `PROVERB`, `IDIOM`을 고유어, 한자어, 외래어, 속담, 관용어로 표시합니다.
+- 프론트엔드 기본 퀴즈 화면은 `NATIVE_KOREAN`, `SINO_KOREAN`, `LOANWORD`, `PROVERB`, `IDIOM`, `FOUR_CHARACTER_IDIOM`을 고유어, 한자어, 외래어, 속담, 관용어, 사자성어로 표시합니다.
 - `questionCount`는 1 이상이어야 합니다.
 - 선택한 category의 어휘에서 랜덤으로 문제를 생성합니다.
 - 같은 퀴즈 세트 안에서 동일한 `vocabularyId`는 중복 출제되지 않습니다.

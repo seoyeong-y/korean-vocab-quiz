@@ -101,7 +101,7 @@ public class GeminiVocabularyImageAnalysisClient implements VocabularyImageAnaly
                         It is better to return fewer items or an empty items array than to create content not visible in the image.
 
                         Return only word, meaning, category, needsReview, confidence, and imageNumber.
-                        Categories must be one of NATIVE_KOREAN, SINO_KOREAN, LOANWORD, PROVERB, IDIOM.
+                        Categories must be one of NATIVE_KOREAN, SINO_KOREAN, LOANWORD, PROVERB, IDIOM, FOUR_CHARACTER_IDIOM.
                         Category may be classified by AI only after word and meaning have been copied from visible text.
                         """
         ));
@@ -131,7 +131,7 @@ public class GeminiVocabularyImageAnalysisClient implements VocabularyImageAnaly
                                         "meaning", Map.of("type", "string"),
                                         "category", Map.of(
                                                 "type", "string",
-                                                "enum", List.of("NATIVE_KOREAN", "SINO_KOREAN", "LOANWORD", "PROVERB", "IDIOM")
+                                                "enum", List.of("NATIVE_KOREAN", "SINO_KOREAN", "LOANWORD", "PROVERB", "IDIOM", "FOUR_CHARACTER_IDIOM")
                                         ),
                                         "needsReview", Map.of("type", "boolean"),
                                         "confidence", Map.of("type", "number")

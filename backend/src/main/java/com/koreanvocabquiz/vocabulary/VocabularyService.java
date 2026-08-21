@@ -341,7 +341,8 @@ public class VocabularyService {
                 VocabularyCategory.SINO_KOREAN,
                 VocabularyCategory.LOANWORD,
                 VocabularyCategory.PROVERB,
-                VocabularyCategory.IDIOM
+                VocabularyCategory.IDIOM,
+                VocabularyCategory.FOUR_CHARACTER_IDIOM
         };
     }
 

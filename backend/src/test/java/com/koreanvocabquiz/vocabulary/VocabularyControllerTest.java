@@ -220,9 +220,9 @@ class VocabularyControllerTest {
         when(vocabularyImageAnalysisClient.extract(anyList()))
                 .thenReturn(List.of(new VocabularyImageAnalysisResult(
                         1,
-                        "가람",
-                        "강을 뜻하는 옛말",
-                        "NATIVE_KOREAN",
+                        "각골난망",
+                        "은혜를 잊기 어려움",
+                        "FOUR_CHARACTER_IDIOM",
                         false,
                         0.91
                 )));
@@ -233,9 +233,9 @@ class VocabularyControllerTest {
                 .andExpect(jsonPath("$.totalCount").value(1))
                 .andExpect(jsonPath("$.items[0].imageNumber").value(1))
                 .andExpect(jsonPath("$.items[0].rowNumber").value(1))
-                .andExpect(jsonPath("$.items[0].word").value("가람"))
-                .andExpect(jsonPath("$.items[0].meaning").value("강을 뜻하는 옛말"))
-                .andExpect(jsonPath("$.items[0].category").value("NATIVE_KOREAN"))
+                .andExpect(jsonPath("$.items[0].word").value("각골난망"))
+                .andExpect(jsonPath("$.items[0].meaning").value("은혜를 잊기 어려움"))
+                .andExpect(jsonPath("$.items[0].category").value("FOUR_CHARACTER_IDIOM"))
                 .andExpect(jsonPath("$.items[0].needsReview").value(false))
                 .andExpect(jsonPath("$.items[0].confidence").value(0.91));
 
@@ -421,9 +421,9 @@ class VocabularyControllerTest {
                                       "category": "NATIVE_KOREAN"
                                     },
                                     {
-                                      "word": "나래",
-                                      "meaning": "날개",
-                                      "category": "NATIVE_KOREAN"
+                                      "word": "각골난망",
+                                      "meaning": "은혜를 잊기 어려움",
+                                      "category": "FOUR_CHARACTER_IDIOM"
                                     },
                                     {
                                       "word": "",
