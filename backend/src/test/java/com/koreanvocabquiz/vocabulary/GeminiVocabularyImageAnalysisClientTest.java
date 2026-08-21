@@ -24,22 +24,34 @@ class GeminiVocabularyImageAnalysisClientTest {
     @Test
     @SuppressWarnings("unchecked")
     void createRequestBodyUsesStrictVisibleTextPrompt() {
-        Map<String, Object> requestBody = client.createRequestBody(List.of(
+        Map<String, Object> requestBody = client.createRequestBody(
                 new VocabularyImageFile(1, "image/jpeg", "image".getBytes(StandardCharsets.UTF_8))
-        ));
+        );
 
         List<Map<String, Object>> contents = (List<Map<String, Object>>) requestBody.get("contents");
         List<Map<String, Object>> parts = (List<Map<String, Object>>) contents.get(0).get("parts");
         String prompt = (String) parts.get(0).get("text");
+        long imagePartCount = parts.stream()
+                .filter(part -> part.containsKey("inlineData"))
+                .count();
 
         assertThat(prompt).contains(
-                "Read only the text visibly present in the image.",
-                "Do not add, infer, complete, correct, paraphrase, or supplement any word or meaning using outside knowledge.",
-                "Do not replace or improve meanings with dictionary definitions.",
-                "If text is unclear, blurred, cut off, or partially hidden, do not guess.",
-                "Omit uncertain content or mark it as needsReview.",
-                "Missing uncertain content is better than creating incorrect content."
+                "You are a strict OCR transcription tool for Korean vocabulary images.",
+                "This request contains exactly one image.",
+                "Return items only from this one image.",
+                "Do not use text from any other image or previous request.",
+                "Every returned item must use the imageNumber provided immediately before the image.",
+                "Read only text that is visibly present in the image pixels.",
+                "Return an item only when both a word and its meaning are explicitly visible in the image.",
+                "Copy word exactly as visible. Copy meaning exactly as visible.",
+                "Do not add words that are not visible in the image.",
+                "Do not use dictionary knowledge, Korean language knowledge, context, textbook patterns, or common sense to fill any value.",
+                "If either word or meaning is unclear, blurred, cut off, partially hidden, or not explicitly paired, omit the item.",
+                "It is better to return fewer items or an empty items array than to create content not visible in the image."
         );
+        assertThat(prompt).doesNotContain("Extract target vocabulary entries");
+        assertThat(parts.get(1).get("text")).isEqualTo("The only image in this request is imageNumber 1.");
+        assertThat(imagePartCount).isEqualTo(1);
     }
 
     @Test
