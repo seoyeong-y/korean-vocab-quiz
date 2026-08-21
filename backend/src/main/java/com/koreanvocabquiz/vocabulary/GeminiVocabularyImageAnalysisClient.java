@@ -89,6 +89,9 @@ public class GeminiVocabularyImageAnalysisClient implements VocabularyImageAnaly
                         Read only text that is visibly present in the image pixels.
                         Return an item only when both a word and its meaning are explicitly visible in the image.
                         Copy word exactly as visible. Copy meaning exactly as visible.
+                        If one visible word has multiple meanings marked with number symbols such as ① ② ③ ④ ⑤, return one item for that word.
+                        Keep those numbered meanings together in a single meaning string, preserving the visible number symbols.
+                        Do not split numbered meanings for the same word into separate items.
                         Do not add words that are not visible in the image.
                         Do not add meanings that are not visible in the image.
                         Do not infer missing letters, complete cropped text, correct spelling, paraphrase, summarize, translate, or supplement content.
