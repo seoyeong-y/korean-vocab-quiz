@@ -7,7 +7,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import com.koreanvocabquiz.common.ResourceNotFoundException;
@@ -172,35 +174,53 @@ public class VocabularyService {
             List<VocabularyImageAnalysisResult> aiResults,
             int imageCount
     ) {
-        List<VocabularyImageCandidateResponse> candidates = new ArrayList<>();
-        int rowNumber = 1;
-
+        Map<ImageWordKey, MergedImageAnalysisResult> mergedResults = new LinkedHashMap<>();
         for (VocabularyImageAnalysisResult result : aiResults) {
-            if (result.imageNumber() < 1 || result.imageNumber() > imageCount) {
-                throw new VocabularyImageExtractionException("AI response contains an invalid imageNumber.");
-            }
-            if (result.word() == null || result.word().isBlank()) {
-                throw new VocabularyImageExtractionException("AI response contains an item without word.");
-            }
-            if (result.meaning() == null || result.meaning().isBlank()) {
-                throw new VocabularyImageExtractionException("AI response contains an item without meaning.");
-            }
-            if (result.category() == null || !isStudyCategory(result.category())) {
-                throw new VocabularyImageExtractionException("AI response contains an invalid category.");
-            }
+            validateAnalysisResult(result, imageCount);
 
-            candidates.add(new VocabularyImageCandidateResponse(
-                    result.imageNumber(),
-                    rowNumber++,
-                    result.word().trim(),
-                    result.meaning().trim(),
+            int imageNumber = result.imageNumber();
+            String word = result.word().trim();
+            ImageWordKey key = new ImageWordKey(imageNumber, word);
+            mergedResults.computeIfAbsent(key, ignored -> new MergedImageAnalysisResult(
+                    imageNumber,
+                    word,
                     VocabularyCategory.valueOf(result.category()),
                     result.needsReview(),
                     result.confidence()
+            )).merge(result);
+        }
+
+        List<VocabularyImageCandidateResponse> candidates = new ArrayList<>();
+        int rowNumber = 1;
+
+        for (MergedImageAnalysisResult result : mergedResults.values()) {
+            candidates.add(new VocabularyImageCandidateResponse(
+                    result.imageNumber,
+                    rowNumber++,
+                    result.word,
+                    result.meaning(),
+                    result.category,
+                    result.needsReview,
+                    result.confidence
             ));
         }
 
         return candidates;
+    }
+
+    private void validateAnalysisResult(VocabularyImageAnalysisResult result, int imageCount) {
+        if (result.imageNumber() < 1 || result.imageNumber() > imageCount) {
+            throw new VocabularyImageExtractionException("AI response contains an invalid imageNumber.");
+        }
+        if (result.word() == null || result.word().isBlank()) {
+            throw new VocabularyImageExtractionException("AI response contains an item without word.");
+        }
+        if (result.meaning() == null || result.meaning().isBlank()) {
+            throw new VocabularyImageExtractionException("AI response contains an item without meaning.");
+        }
+        if (result.category() == null || !isStudyCategory(result.category())) {
+            throw new VocabularyImageExtractionException("AI response contains an invalid category.");
+        }
     }
 
     private VocabularyCsvUploadResponse saveRows(
@@ -349,6 +369,66 @@ public class VocabularyService {
             String meaning,
             String category
     ) implements VocabularyRowData {
+    }
+
+    private record ImageWordKey(
+            int imageNumber,
+            String word
+    ) {
+    }
+
+    private static final class MergedImageAnalysisResult {
+
+        private final int imageNumber;
+        private final String word;
+        private final StringBuilder meaning = new StringBuilder();
+        private final Set<String> meanings = new HashSet<>();
+        private VocabularyCategory category;
+        private boolean needsReview;
+        private Double confidence;
+
+        private MergedImageAnalysisResult(
+                int imageNumber,
+                String word,
+                VocabularyCategory category,
+                boolean needsReview,
+                Double confidence
+        ) {
+            this.imageNumber = imageNumber;
+            this.word = word;
+            this.category = category;
+            this.needsReview = needsReview;
+            this.confidence = confidence;
+        }
+
+        private void merge(VocabularyImageAnalysisResult result) {
+            String nextMeaning = result.meaning().trim();
+            if (meanings.add(nextMeaning)) {
+                if (!meaning.isEmpty()) {
+                    meaning.append(System.lineSeparator());
+                }
+                meaning.append(nextMeaning);
+            }
+
+            VocabularyCategory nextCategory = VocabularyCategory.valueOf(result.category());
+            if (category != nextCategory) {
+                needsReview = true;
+            }
+
+            needsReview = needsReview || result.needsReview();
+            confidence = lowerConfidence(confidence, result.confidence());
+        }
+
+        private String meaning() {
+            return meaning.toString();
+        }
+
+        private Double lowerConfidence(Double current, Double next) {
+            if (current == null || next == null) {
+                return null;
+            }
+            return Math.min(current, next);
+        }
     }
 
     private record VocabularyDuplicateKey(

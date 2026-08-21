@@ -263,6 +263,33 @@ class VocabularyControllerTest {
     }
 
     @Test
+    void extractVocabularyMergesNumberedMeaningsForSameWord() throws Exception {
+        when(vocabularyImageAnalysisClient.extract(anyList()))
+                .thenReturn(List.of(
+                        new VocabularyImageAnalysisResult(1, "가다", "① 한 곳에서 다른 곳으로 장소를 이동하다", "NATIVE_KOREAN", false, 0.91),
+                        new VocabularyImageAnalysisResult(1, "가다", "② 시간이 흐르다", "NATIVE_KOREAN", false, 0.88),
+                        new VocabularyImageAnalysisResult(1, "가다", "③ 어떤 상태가 계속되다", "SINO_KOREAN", true, 0.61),
+                        new VocabularyImageAnalysisResult(1, "나래", "날개", "NATIVE_KOREAN", false, 0.92)
+                ));
+
+        mockMvc.perform(multipart("/api/vocabularies/image/extract")
+                        .file(imageFile("files", "page.jpg", "image/jpeg")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(2))
+                .andExpect(jsonPath("$.items[0].imageNumber").value(1))
+                .andExpect(jsonPath("$.items[0].rowNumber").value(1))
+                .andExpect(jsonPath("$.items[0].word").value("가다"))
+                .andExpect(jsonPath("$.items[0].meaning").value("""
+                        ① 한 곳에서 다른 곳으로 장소를 이동하다
+                        ② 시간이 흐르다
+                        ③ 어떤 상태가 계속되다"""))
+                .andExpect(jsonPath("$.items[0].category").value("NATIVE_KOREAN"))
+                .andExpect(jsonPath("$.items[0].needsReview").value(true))
+                .andExpect(jsonPath("$.items[0].confidence").value(0.61))
+                .andExpect(jsonPath("$.items[1].word").value("나래"));
+    }
+
+    @Test
     void multipartImageUploadLimitsAreConfigured() {
         org.assertj.core.api.Assertions.assertThat(environment.getProperty("spring.servlet.multipart.max-file-size"))
                 .isEqualTo("10MB");
