@@ -24,7 +24,8 @@ import org.springframework.web.multipart.MultipartFile;
 public class VocabularyService {
 
     private static final int MAX_IMAGE_COUNT = 5;
-    private static final long MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+    private static final long MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+    private static final long MAX_IMAGE_REQUEST_SIZE_BYTES = 50 * 1024 * 1024;
     private static final Set<String> SUPPORTED_IMAGE_TYPES = Set.of(
             "image/jpeg",
             "image/png",
@@ -121,6 +122,13 @@ public class VocabularyService {
         if (files.size() > MAX_IMAGE_COUNT) {
             throw new VocabularyImageExtractionException("Up to " + MAX_IMAGE_COUNT + " images can be uploaded at once.");
         }
+        long totalSize = files.stream()
+                .filter(file -> file != null)
+                .mapToLong(MultipartFile::getSize)
+                .sum();
+        if (totalSize > MAX_IMAGE_REQUEST_SIZE_BYTES) {
+            throw new VocabularyImageExtractionException("Total image upload size must be 50MB or less.");
+        }
 
         List<VocabularyImageFile> images = new ArrayList<>();
         for (int index = 0; index < files.size(); index++) {
@@ -147,7 +155,7 @@ public class VocabularyService {
             throw new VocabularyImageExtractionException("Image file is required.");
         }
         if (file.getSize() > MAX_IMAGE_SIZE_BYTES) {
-            throw new VocabularyImageExtractionException("Image file size must be 5MB or less.");
+            throw new VocabularyImageExtractionException("Image file size must be 10MB or less.");
         }
 
         String mediaType = normalizeMediaType(file.getContentType());

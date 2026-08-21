@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.core.env.Environment;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
@@ -41,6 +42,9 @@ class VocabularyControllerTest {
 
     @Autowired
     private VocabularyRepository vocabularyRepository;
+
+    @Autowired
+    private Environment environment;
 
     @MockBean
     private VocabularyImageAnalysisClient vocabularyImageAnalysisClient;
@@ -259,6 +263,38 @@ class VocabularyControllerTest {
     }
 
     @Test
+    void multipartImageUploadLimitsAreConfigured() {
+        org.assertj.core.api.Assertions.assertThat(environment.getProperty("spring.servlet.multipart.max-file-size"))
+                .isEqualTo("10MB");
+        org.assertj.core.api.Assertions.assertThat(environment.getProperty("spring.servlet.multipart.max-request-size"))
+                .isEqualTo("50MB");
+    }
+
+    @Test
+    void acceptImageUpToTenMegabytes() throws Exception {
+        when(vocabularyImageAnalysisClient.extract(anyList()))
+                .thenReturn(List.of(new VocabularyImageAnalysisResult(
+                        1,
+                        "가람",
+                        "강을 뜻하는 옛말",
+                        "NATIVE_KOREAN",
+                        false,
+                        0.91
+                )));
+
+        MockMultipartFile file = new MockMultipartFile(
+                "files",
+                "ten-megabytes.jpg",
+                "image/jpeg",
+                new byte[10 * 1024 * 1024]
+        );
+
+        mockMvc.perform(multipart("/api/vocabularies/image/extract").file(file))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(1));
+    }
+
+    @Test
     void rejectInvalidImageType() throws Exception {
         MockMultipartFile file = new MockMultipartFile(
                 "files",
@@ -278,12 +314,24 @@ class VocabularyControllerTest {
                 "files",
                 "large.jpg",
                 "image/jpeg",
-                new byte[5 * 1024 * 1024 + 1]
+                new byte[10 * 1024 * 1024 + 1]
         );
 
         mockMvc.perform(multipart("/api/vocabularies/image/extract").file(file))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.messages[0]").value("Image file size must be 5MB or less."));
+                .andExpect(jsonPath("$.messages[0]").value("Image file size must be 10MB or less."));
+    }
+
+    @Test
+    void rejectOversizedImageRequest() throws Exception {
+        mockMvc.perform(multipart("/api/vocabularies/image/extract")
+                        .file(imageFileWithSize("files", "first.jpg", "image/jpeg", 10 * 1024 * 1024))
+                        .file(imageFileWithSize("files", "second.jpg", "image/jpeg", 10 * 1024 * 1024))
+                        .file(imageFileWithSize("files", "third.jpg", "image/jpeg", 10 * 1024 * 1024))
+                        .file(imageFileWithSize("files", "fourth.jpg", "image/jpeg", 10 * 1024 * 1024))
+                        .file(imageFileWithSize("files", "fifth.jpg", "image/jpeg", 10 * 1024 * 1024 + 1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.messages[0]").value("Total image upload size must be 50MB or less."));
     }
 
     @Test
@@ -385,6 +433,15 @@ class VocabularyControllerTest {
                 filename,
                 contentType,
                 "image".getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
+    private MockMultipartFile imageFileWithSize(String name, String filename, String contentType, int size) {
+        return new MockMultipartFile(
+                name,
+                filename,
+                contentType,
+                new byte[size]
         );
     }
 }

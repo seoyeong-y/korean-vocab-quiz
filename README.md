@@ -250,7 +250,8 @@ webp
 Limits:
 
 - 한 번에 최대 5장까지 업로드할 수 있습니다.
-- 이미지 파일 1개는 5MB 이하여야 합니다.
+- 이미지 파일 1개는 10MB 이하여야 합니다.
+- 요청 전체 크기는 50MB 이하여야 합니다.
 - 업로드 MIME type은 `image/jpeg`, `image/png`, `image/webp`만 허용합니다.
 
 AI category classification:
