@@ -12,6 +12,11 @@ import {
 } from './api';
 import './styles.css';
 
+const MAX_IMAGE_COUNT = 5;
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGE_REQUEST_SIZE_BYTES = 50 * 1024 * 1024;
+const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
 const categories = [
   { value: 'NATIVE_KOREAN', label: '고유어', description: '순우리말 어휘' },
   { value: 'SINO_KOREAN', label: '한자어', description: '한자 기반 어휘' },
@@ -461,7 +466,19 @@ function AdminImageVocabularyScreen({ onBack }) {
   const selectedCount = items.filter((item) => item.selected).length;
 
   function handleFileChange(event) {
-    setFiles(Array.from(event.target.files || []));
+    const selectedFiles = Array.from(event.target.files || []);
+    const validationMessage = validateImageFiles(selectedFiles);
+
+    if (validationMessage) {
+      setFiles([]);
+      setItems([]);
+      setError(validationMessage);
+      setSaveResult(null);
+      event.target.value = '';
+      return;
+    }
+
+    setFiles(selectedFiles);
     setError('');
     setSaveResult(null);
   }
@@ -545,7 +562,7 @@ function AdminImageVocabularyScreen({ onBack }) {
       <form className="upload-form" onSubmit={handleExtract}>
         <label className="file-drop-label" htmlFor="image-files">
           <span>이미지 선택</span>
-          <small>jpg, jpeg, png, webp / 최대 5장 / 파일당 5MB 이하</small>
+          <small>jpg, jpeg, png, webp / 최대 5장 / 파일당 10MB 이하 / 요청 전체 50MB 이하</small>
           <input
             accept="image/jpeg,image/png,image/webp"
             disabled={loading || saving}
@@ -667,6 +684,33 @@ function AdminImageVocabularyScreen({ onBack }) {
       {saveResult && <BatchSaveResult result={saveResult} />}
     </section>
   );
+}
+
+function validateImageFiles(selectedFiles) {
+  if (selectedFiles.length > MAX_IMAGE_COUNT) {
+    return `이미지는 한 번에 최대 ${MAX_IMAGE_COUNT}장까지 업로드할 수 있습니다.`;
+  }
+
+  const unsupportedFile = selectedFiles.find((file) => !SUPPORTED_IMAGE_TYPES.has(file.type));
+  if (unsupportedFile) {
+    return 'jpg, jpeg, png, webp 이미지만 업로드할 수 있습니다.';
+  }
+
+  const oversizedFile = selectedFiles.find((file) => file.size > MAX_IMAGE_SIZE_BYTES);
+  if (oversizedFile) {
+    return `이미지 파일은 1장당 최대 ${formatFileSize(MAX_IMAGE_SIZE_BYTES)}까지 업로드할 수 있습니다.`;
+  }
+
+  const totalSize = selectedFiles.reduce((sum, file) => sum + file.size, 0);
+  if (totalSize > MAX_IMAGE_REQUEST_SIZE_BYTES) {
+    return `이미지 전체 용량은 한 번에 최대 ${formatFileSize(MAX_IMAGE_REQUEST_SIZE_BYTES)}까지 업로드할 수 있습니다.`;
+  }
+
+  return '';
+}
+
+function formatFileSize(bytes) {
+  return `${Math.floor(bytes / 1024 / 1024)}MB`;
 }
 
 function WrongAnswerScreen({
@@ -1041,8 +1085,8 @@ function normalizeError(message) {
   if (message.includes('Only jpg')) {
     return '지원하지 않는 파일 형식입니다. jpg, jpeg, png, webp 이미지만 업로드해 주세요.';
   }
-  if (message.includes('5MB')) {
-    return '파일 크기가 너무 큽니다. 이미지당 5MB 이하로 업로드해 주세요.';
+  if (message.includes('10MB') || message.includes('50MB')) {
+    return '파일 크기가 너무 큽니다. 이미지당 10MB 이하, 요청 전체 50MB 이하로 업로드해 주세요.';
   }
   if (message.includes('AI API call failed')) {
     return 'AI API 호출에 실패했습니다. 잠시 후 다시 시도해 주세요.';
