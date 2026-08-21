@@ -462,6 +462,7 @@ function AdminImageVocabularyScreen({ onBack }) {
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
   const [saveResult, setSaveResult] = React.useState(null);
+  const manualRowSequence = React.useRef(1);
 
   const selectedCount = items.filter((item) => item.selected).length;
 
@@ -494,6 +495,7 @@ function AdminImageVocabularyScreen({ onBack }) {
       const extractedItems = (response.items || []).map((item, index) => ({
         ...item,
         localId: `${item.imageNumber}-${item.rowNumber}-${index}`,
+        sourceLabel: `이미지 ${item.imageNumber}`,
         selected: true,
       }));
       setItems(extractedItems);
@@ -515,6 +517,28 @@ function AdminImageVocabularyScreen({ onBack }) {
 
   function removeItem(localId) {
     setItems((previousItems) => previousItems.filter((item) => item.localId !== localId));
+  }
+
+  function addManualItem() {
+    const sequence = manualRowSequence.current;
+    manualRowSequence.current += 1;
+    setItems((previousItems) => ([
+      ...previousItems,
+      {
+        localId: `manual-${Date.now()}-${sequence}`,
+        imageNumber: null,
+        rowNumber: previousItems.length + 1,
+        sourceLabel: '수동 추가',
+        word: '',
+        meaning: '',
+        category: 'NATIVE_KOREAN',
+        needsReview: true,
+        confidence: null,
+        selected: true,
+      },
+    ]));
+    setError('');
+    setSaveResult(null);
   }
 
   function setAllSelected(selected) {
@@ -577,6 +601,9 @@ function AdminImageVocabularyScreen({ onBack }) {
           <button className="primary-button" disabled={loading || saving || files.length === 0} type="submit">
             {loading ? 'AI 추출 중' : '이미지에서 어휘 추출'}
           </button>
+          <button className="secondary-button" disabled={loading || saving} type="button" onClick={addManualItem}>
+            행 직접 추가
+          </button>
           <span className="field-hint">{files.length}개 이미지 선택됨</span>
         </div>
       </form>
@@ -605,6 +632,9 @@ function AdminImageVocabularyScreen({ onBack }) {
               <button className="secondary-button" disabled={saving} type="button" onClick={() => setAllSelected(false)}>
                 전체 선택 해제
               </button>
+              <button className="secondary-button" disabled={saving} type="button" onClick={addManualItem}>
+                행 추가
+              </button>
             </div>
           </div>
 
@@ -622,7 +652,7 @@ function AdminImageVocabularyScreen({ onBack }) {
                     저장
                   </label>
                   <div className="admin-badges">
-                    <span className="category-badge">이미지 {item.imageNumber}</span>
+                    <span className="category-badge">{item.sourceLabel || `이미지 ${item.imageNumber}`}</span>
                     {item.needsReview && <span className="review-badge">검토 필요</span>}
                   </div>
                 </div>
@@ -638,8 +668,9 @@ function AdminImageVocabularyScreen({ onBack }) {
                   </label>
                   <label className="field-label">
                     <span>meaning</span>
-                    <input
+                    <textarea
                       disabled={saving}
+                      rows={3}
                       value={item.meaning}
                       onChange={(event) => updateItem(item.localId, 'meaning', event.target.value)}
                     />
