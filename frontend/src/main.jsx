@@ -551,16 +551,18 @@ function AdminImageVocabularyScreen({ onBack }) {
     setSaveResult(null);
 
     try {
+      const selectedItems = items.filter((item) => item.selected);
       const response = await saveVocabularyBatch(
-        items
-          .filter((item) => item.selected)
-          .map((item) => ({
-            word: item.word,
-            meaning: item.meaning,
-            category: item.category,
-          }))
+        selectedItems.map((item) => ({
+          word: item.word,
+          meaning: item.meaning,
+          category: item.category,
+        }))
       );
-      setSaveResult(response);
+      setSaveResult({
+        ...response,
+        sourceItems: selectedItems,
+      });
     } catch (saveError) {
       setError(normalizeError(saveError.message));
     } finally {
@@ -1000,6 +1002,9 @@ function ResultScreen({ totalCount, correctCount, incorrectCount, accuracy, quiz
 }
 
 function BatchSaveResult({ result }) {
+  const skippedRows = enrichRowResults(result.skippedRows, result.sourceItems);
+  const failedRows = enrichRowResults(result.failedRows, result.sourceItems);
+
   return (
     <section className="save-result" aria-labelledby="save-result-title">
       <h2 id="save-result-title">저장 결과</h2>
@@ -1022,22 +1027,57 @@ function BatchSaveResult({ result }) {
         </div>
       </dl>
 
-      {(result.skippedRows?.length > 0 || result.failedRows?.length > 0) && (
+      {(skippedRows.length > 0 || failedRows.length > 0) && (
         <div className="row-result-list">
-          {result.skippedRows?.map((row) => (
-            <p key={`skipped-${row.rowNumber}`}>
-              skipped #{row.rowNumber}: {row.reason}
-            </p>
-          ))}
-          {result.failedRows?.map((row) => (
-            <p key={`failed-${row.rowNumber}`}>
-              failed #{row.rowNumber}: {row.reason}
-            </p>
-          ))}
+          {skippedRows.length > 0 && (
+            <RowResultGroup title="중복으로 건너뛴 항목" rows={skippedRows} status="skipped" />
+          )}
+          {failedRows.length > 0 && (
+            <RowResultGroup title="저장 실패 항목" rows={failedRows} status="failed" />
+          )}
         </div>
       )}
     </section>
   );
+}
+
+function RowResultGroup({ title, rows, status }) {
+  return (
+    <div className="row-result-group">
+      <h3>{title}</h3>
+      {rows.map((row) => (
+        <article className={`row-result-item ${status}`} key={`${status}-${row.rowNumber}`}>
+          <div className="row-result-header">
+            <strong>#{row.rowNumber}</strong>
+            <span>{row.reason}</span>
+          </div>
+          {row.item && (
+            <dl className="row-result-detail">
+              <div>
+                <dt>단어</dt>
+                <dd>{row.item.word || '-'}</dd>
+              </div>
+              <div>
+                <dt>뜻</dt>
+                <dd>{row.item.meaning || '-'}</dd>
+              </div>
+              <div>
+                <dt>카테고리</dt>
+                <dd>{categoryLabel(row.item.category)}</dd>
+              </div>
+            </dl>
+          )}
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function enrichRowResults(rows = [], sourceItems = []) {
+  return rows.map((row) => ({
+    ...row,
+    item: sourceItems[row.rowNumber - 1],
+  }));
 }
 
 function ErrorMessage({ message }) {
