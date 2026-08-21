@@ -267,8 +267,8 @@ class VocabularyControllerTest {
         when(vocabularyImageAnalysisClient.extract(anyList()))
                 .thenReturn(List.of(
                         new VocabularyImageAnalysisResult(1, "가다", "① 한 곳에서 다른 곳으로 장소를 이동하다", "NATIVE_KOREAN", false, 0.91),
-                        new VocabularyImageAnalysisResult(1, "가다", "② 시간이 흐르다", "NATIVE_KOREAN", false, 0.88),
-                        new VocabularyImageAnalysisResult(1, "가다", "③ 어떤 상태가 계속되다", "SINO_KOREAN", true, 0.61),
+                        new VocabularyImageAnalysisResult(1, "가다", "② 시간이 흐르다③ 어떤 상태가 계속되다", "NATIVE_KOREAN", false, 0.88),
+                        new VocabularyImageAnalysisResult(1, "가다", "④ 어떤 기준에 이르다", "SINO_KOREAN", true, 0.61),
                         new VocabularyImageAnalysisResult(1, "나래", "날개", "NATIVE_KOREAN", false, 0.92)
                 ));
 
@@ -281,8 +281,8 @@ class VocabularyControllerTest {
                 .andExpect(jsonPath("$.items[0].word").value("가다"))
                 .andExpect(jsonPath("$.items[0].meaning").value("""
                         ① 한 곳에서 다른 곳으로 장소를 이동하다
-                        ② 시간이 흐르다
-                        ③ 어떤 상태가 계속되다"""))
+                        ② 시간이 흐르다 ③ 어떤 상태가 계속되다
+                        ④ 어떤 기준에 이르다"""))
                 .andExpect(jsonPath("$.items[0].category").value("NATIVE_KOREAN"))
                 .andExpect(jsonPath("$.items[0].needsReview").value(true))
                 .andExpect(jsonPath("$.items[0].confidence").value(0.61))
