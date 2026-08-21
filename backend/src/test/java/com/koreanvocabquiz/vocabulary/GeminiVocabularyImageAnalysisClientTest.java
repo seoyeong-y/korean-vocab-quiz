@@ -10,27 +10,28 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
 
-class OpenAiVocabularyImageAnalysisClientTest {
+class GeminiVocabularyImageAnalysisClientTest {
 
-    private final OpenAiVocabularyImageAnalysisClient client = new OpenAiVocabularyImageAnalysisClient(
+    private final GeminiVocabularyImageAnalysisClient client = new GeminiVocabularyImageAnalysisClient(
             RestClient.builder(),
             new ObjectMapper(),
             "test-key",
-            "gpt-4.1-mini"
+            "gemini-2.5-flash"
     );
 
     @Test
     void parseStructuredOutputResponse() {
         List<VocabularyImageAnalysisResult> results = client.parseResponse("""
                 {
-                  "output": [
+                  "candidates": [
                     {
-                      "content": [
-                        {
-                          "type": "output_text",
-                          "text": "{\\"items\\":[{\\"imageNumber\\":1,\\"word\\":\\"가람\\",\\"meaning\\":\\"강\\",\\"category\\":\\"NATIVE_KOREAN\\",\\"needsReview\\":false,\\"confidence\\":0.92}]}"
-                        }
-                      ]
+                      "content": {
+                        "parts": [
+                          {
+                            "text": "{\\"items\\":[{\\"imageNumber\\":1,\\"word\\":\\"가람\\",\\"meaning\\":\\"강\\",\\"category\\":\\"NATIVE_KOREAN\\",\\"needsReview\\":false,\\"confidence\\":0.92}]}"
+                          }
+                        ]
+                      }
                     }
                   ]
                 }
@@ -49,14 +50,15 @@ class OpenAiVocabularyImageAnalysisClientTest {
     void rejectInvalidStructuredOutputResponse() {
         assertThatThrownBy(() -> client.parseResponse("""
                 {
-                  "output": [
+                  "candidates": [
                     {
-                      "content": [
-                        {
-                          "type": "output_text",
-                          "text": "{\\"invalid\\":[]}"
-                        }
-                      ]
+                      "content": {
+                        "parts": [
+                          {
+                            "text": "{\\"invalid\\":[]}"
+                          }
+                        ]
+                      }
                     }
                   ]
                 }

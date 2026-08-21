@@ -13,24 +13,25 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 @Component
-public class OpenAiVocabularyImageAnalysisClient implements VocabularyImageAnalysisClient {
+public class GeminiVocabularyImageAnalysisClient implements VocabularyImageAnalysisClient {
 
-    private static final String RESPONSES_API_URL = "https://api.openai.com/v1/responses";
+    private static final String GENERATE_CONTENT_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
     private final String apiKey;
     private final String model;
 
-    public OpenAiVocabularyImageAnalysisClient(
+    public GeminiVocabularyImageAnalysisClient(
             RestClient.Builder restClientBuilder,
             ObjectMapper objectMapper,
-            @Value("${openai.api-key:}") String apiKey,
-            @Value("${openai.vision-model:gpt-4.1-mini}") String model
+            @Value("${gemini.api-key:}") String apiKey,
+            @Value("${gemini.vision-model:gemini-2.5-flash}") String model
     ) {
         this.restClient = restClientBuilder.build();
         this.objectMapper = objectMapper;
@@ -41,14 +42,13 @@ public class OpenAiVocabularyImageAnalysisClient implements VocabularyImageAnaly
     @Override
     public List<VocabularyImageAnalysisResult> extract(List<VocabularyImageFile> images) {
         if (apiKey == null || apiKey.isBlank()) {
-            throw new VocabularyImageExtractionException("OPENAI_API_KEY is not configured.");
+            throw new VocabularyImageExtractionException("GEMINI_API_KEY is not configured.");
         }
 
         try {
             String response = restClient.post()
-                    .uri(RESPONSES_API_URL)
+                    .uri(createRequestUri())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .headers(headers -> headers.setBearerAuth(apiKey))
                     .body(createRequestBody(images))
                     .retrieve()
                     .body(String.class);
@@ -59,10 +59,17 @@ public class OpenAiVocabularyImageAnalysisClient implements VocabularyImageAnaly
         }
     }
 
+    private String createRequestUri() {
+        return UriComponentsBuilder
+                .fromUriString(GENERATE_CONTENT_API_URL + model + ":generateContent")
+                .queryParam("key", apiKey)
+                .build()
+                .toUriString();
+    }
+
     private Map<String, Object> createRequestBody(List<VocabularyImageFile> images) {
-        List<Map<String, Object>> content = new ArrayList<>();
-        content.add(Map.of(
-                "type", "input_text",
+        List<Map<String, Object>> parts = new ArrayList<>();
+        parts.add(Map.of(
                 "text", """
                         Extract only target vocabulary entries from these Korean study material images.
                         Return word, meaning, category, needsReview, confidence, and imageNumber.
@@ -73,26 +80,25 @@ public class OpenAiVocabularyImageAnalysisClient implements VocabularyImageAnaly
         ));
 
         for (VocabularyImageFile image : images) {
-            content.add(Map.of(
-                    "type", "input_text",
+            parts.add(Map.of(
                     "text", "The next image is imageNumber " + image.imageNumber() + "."
             ));
-            content.add(Map.of(
-                    "type", "input_image",
-                    "image_url", "data:" + image.mediaType() + ";base64," + Base64.getEncoder().encodeToString(image.content())
+            parts.add(Map.of(
+                    "inlineData", Map.of(
+                            "mimeType", image.mediaType(),
+                            "data", Base64.getEncoder().encodeToString(image.content())
+                    )
             ));
         }
 
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("type", "object");
-        schema.put("additionalProperties", false);
         schema.put("required", List.of("items"));
         schema.put("properties", Map.of(
                 "items", Map.of(
                         "type", "array",
                         "items", Map.of(
                                 "type", "object",
-                                "additionalProperties", false,
                                 "required", List.of("imageNumber", "word", "meaning", "category", "needsReview", "confidence"),
                                 "properties", Map.of(
                                         "imageNumber", Map.of("type", "integer"),
@@ -110,18 +116,12 @@ public class OpenAiVocabularyImageAnalysisClient implements VocabularyImageAnaly
         ));
 
         return Map.of(
-                "model", model,
-                "input", List.of(Map.of(
-                        "role", "user",
-                        "content", content
+                "contents", List.of(Map.of(
+                        "parts", parts
                 )),
-                "text", Map.of(
-                        "format", Map.of(
-                                "type", "json_schema",
-                                "name", "vocabulary_image_extraction",
-                                "strict", true,
-                                "schema", schema
-                        )
+                "generationConfig", Map.of(
+                        "responseMimeType", "application/json",
+                        "responseSchema", schema
                 )
         );
     }
@@ -141,20 +141,15 @@ public class OpenAiVocabularyImageAnalysisClient implements VocabularyImageAnaly
     }
 
     private String findOutputText(JsonNode root) {
-        JsonNode outputText = root.get("output_text");
-        if (outputText != null && outputText.isTextual()) {
-            return outputText.asText();
-        }
-
-        JsonNode output = root.get("output");
-        if (output != null && output.isArray()) {
-            for (JsonNode outputItem : output) {
-                JsonNode content = outputItem.get("content");
-                if (content == null || !content.isArray()) {
+        JsonNode candidates = root.get("candidates");
+        if (candidates != null && candidates.isArray()) {
+            for (JsonNode candidate : candidates) {
+                JsonNode parts = candidate.path("content").get("parts");
+                if (parts == null || !parts.isArray()) {
                     continue;
                 }
-                for (JsonNode contentItem : content) {
-                    JsonNode text = contentItem.get("text");
+                for (JsonNode part : parts) {
+                    JsonNode text = part.get("text");
                     if (text != null && text.isTextual()) {
                         return text.asText();
                     }

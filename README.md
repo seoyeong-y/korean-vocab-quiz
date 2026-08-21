@@ -61,11 +61,11 @@ VITE_API_BASE_URL
 Optional AI extraction variables:
 
 ```text
-OPENAI_API_KEY
-OPENAI_VISION_MODEL
+GEMINI_API_KEY
+GEMINI_VISION_MODEL
 ```
 
-`OPENAI_API_KEY`는 이미지 기반 어휘 추출 기능에서만 백엔드가 사용합니다.
+`GEMINI_API_KEY`는 이미지 기반 어휘 추출 기능에서만 백엔드가 사용합니다.
 프론트엔드로 전달하거나 Git에 커밋하지 마세요.
 
 ## Run With Docker Compose
@@ -232,7 +232,7 @@ Response example:
 처리 흐름:
 
 1. 관리자 화면에서 이미지 업로드
-2. 백엔드가 OpenAI Vision API로 `word`, `meaning`, `category`, `needsReview` 후보 추출
+2. 백엔드가 Gemini API로 `word`, `meaning`, `category`, `needsReview` 후보 추출
 3. 추출 결과를 DB에 저장하지 않고 프론트 검수 화면에 표시
 4. 관리자가 저장 여부, 단어, 뜻, 카테고리를 확인 및 수정
 5. `검수 완료 및 저장` 버튼 클릭
@@ -321,7 +321,7 @@ Failure cases shown to users:
 - category 분류 실패
 - 저장 validation 실패
 
-This feature can incur OpenAI API costs when images are analyzed.
+This feature can incur Gemini API costs when images are analyzed.
 Local MVP에서는 관리자 기능 보호가 없으므로, 공개 배포 전 인증/인가나 네트워크 접근 제한으로 관리자 화면과 API를 보호해야 합니다.
 
 ## Quiz API
