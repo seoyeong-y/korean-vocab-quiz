@@ -130,6 +130,7 @@ npm run build
 | `POST` | `/api/vocabularies/batch` | 검수 완료 어휘 일괄 저장 |
 | `POST` | `/api/quizzes` | 퀴즈 생성 |
 | `POST` | `/api/quizzes/submit` | 정답 제출 |
+| `POST` | `/api/quizzes/mastered` | 숙지 어휘 등록 |
 | `GET` | `/api/wrong-answers` | 오답 목록 조회 |
 | `POST` | `/api/wrong-answers/quizzes` | 오답 복습 퀴즈 생성 |
 | `DELETE` | `/api/wrong-answers/{id}` | 오답 개별 삭제 |
@@ -334,10 +335,12 @@ Quiz modes:
 ```text
 WORD_TO_MEANING
 MEANING_TO_WORD
+MIXED
 ```
 
 `WORD_TO_MEANING`은 단어를 보고 뜻을 고르는 방식입니다.
 `MEANING_TO_WORD`는 뜻을 보고 단어를 고르는 방식입니다.
+`MIXED`는 문제마다 `WORD_TO_MEANING` 또는 `MEANING_TO_WORD`를 랜덤으로 선택하는 방식입니다.
 
 Create quiz:
 
@@ -357,6 +360,8 @@ Quiz generation rules:
 - 프론트엔드 기본 퀴즈 화면은 `NATIVE_KOREAN`, `SINO_KOREAN`, `LOANWORD`, `PROVERB`, `IDIOM`, `FOUR_CHARACTER_IDIOM`을 고유어, 한자어, 외래어, 속담, 관용어, 사자성어로 표시합니다.
 - `questionCount`는 1 이상이어야 합니다.
 - 선택한 category의 어휘에서 랜덤으로 문제를 생성합니다.
+- `MIXED`로 생성한 문제도 응답의 `mode`에는 실제 출제 방향인 `WORD_TO_MEANING` 또는 `MEANING_TO_WORD`가 내려갑니다.
+- `완벽하게 알아요`로 등록한 숙지 어휘는 일반 퀴즈 생성 대상에서 제외됩니다.
 - 같은 퀴즈 세트 안에서 동일한 `vocabularyId`는 중복 출제되지 않습니다.
 - 각 문제는 정답 1개와 오답 3개를 포함한 4지선다입니다.
 - 오답은 같은 category의 다른 Vocabulary에서 가져옵니다.
@@ -422,6 +427,30 @@ Submit answer response example:
 }
 ```
 
+Mark a question as mastered:
+
+```bash
+curl -X POST http://localhost:8080/api/quizzes/mastered \
+  -H "Content-Type: application/json" \
+  -d '{
+    "questionId": "b2e4c407-67e0-4203-bb01-1306a5a790d1"
+  }'
+```
+
+Mastered response example:
+
+```json
+{
+  "mastered": true,
+  "correctAnswer": "apple",
+  "vocabularyId": 1
+}
+```
+
+숙지 어휘 등록은 서버가 실제로 생성한 `questionId`만 받습니다.
+숙지 처리된 어휘는 `mastered_vocabularies`에 저장되며, 같은 어휘가 오답노트에 남아 있으면 함께 제거됩니다.
+현재 MVP에서는 로그인 없이 전체 사용자 공통 숙지 목록으로 동작합니다.
+
 Quiz error cases:
 
 - 선택한 category의 어휘가 4개 미만이면 4지선다 퀴즈를 생성할 수 없습니다.
@@ -431,6 +460,7 @@ Quiz error cases:
 - 생성되지 않았거나 만료된 `questionId`로 제출하면 400 응답으로 처리됩니다.
 - 해당 문제의 options에 없는 `selectedOptionId`로 제출하면 400 응답으로 처리됩니다.
 - 정답 제출 시 클라이언트의 정답 여부는 신뢰하지 않고 서버가 저장한 문제 세션을 기준으로 판정합니다.
+- 생성되지 않았거나 만료된 `questionId`로 숙지 등록을 요청하면 400 응답으로 처리됩니다.
 
 ## Wrong Answer Review
 

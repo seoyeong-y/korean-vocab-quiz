@@ -28,4 +28,9 @@ public class QuizController {
     public QuizSubmitResponse submit(@Valid @RequestBody QuizSubmitRequest request) {
         return quizService.submit(request);
     }
+
+    @PostMapping("/mastered")
+    public QuizMasteredResponse markMastered(@Valid @RequestBody QuizMasteredRequest request) {
+        return quizService.markMastered(request);
+    }
 }

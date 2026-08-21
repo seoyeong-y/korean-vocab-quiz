@@ -36,6 +36,13 @@ export function submitQuizAnswer(payload) {
   });
 }
 
+export function markQuizQuestionMastered(payload) {
+  return request('/api/quizzes/mastered', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getWrongAnswers() {
   return request('/api/wrong-answers');
 }

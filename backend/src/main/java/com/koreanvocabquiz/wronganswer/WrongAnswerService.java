@@ -97,4 +97,9 @@ public class WrongAnswerService {
     public void deleteAll() {
         wrongAnswerRepository.deleteAll();
     }
+
+    @Transactional
+    public void deleteByVocabulary(Vocabulary vocabulary) {
+        wrongAnswerRepository.deleteByVocabulary(vocabulary);
+    }
 }
