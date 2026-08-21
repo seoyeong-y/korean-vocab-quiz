@@ -45,11 +45,19 @@ public class GeminiVocabularyImageAnalysisClient implements VocabularyImageAnaly
             throw new VocabularyImageExtractionException("GEMINI_API_KEY is not configured.");
         }
 
+        List<VocabularyImageAnalysisResult> results = new ArrayList<>();
+        for (VocabularyImageFile image : images) {
+            results.addAll(extractSingleImage(image));
+        }
+        return results;
+    }
+
+    private List<VocabularyImageAnalysisResult> extractSingleImage(VocabularyImageFile image) {
         try {
             String response = restClient.post()
                     .uri(createRequestUri())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(createRequestBody(images))
+                    .body(createRequestBody(image))
                     .retrieve()
                     .body(String.class);
 
@@ -67,36 +75,43 @@ public class GeminiVocabularyImageAnalysisClient implements VocabularyImageAnaly
                 .toUriString();
     }
 
-    Map<String, Object> createRequestBody(List<VocabularyImageFile> images) {
+    Map<String, Object> createRequestBody(VocabularyImageFile image) {
         List<Map<String, Object>> parts = new ArrayList<>();
         parts.add(Map.of(
                 "text", """
-                        Extract target vocabulary entries from Korean study material images.
-                        Read only the text visibly present in the image.
-                        Do not add, infer, complete, correct, paraphrase, or supplement any word or meaning using outside knowledge.
-                        Keep word and meaning as close to the visible original text as possible.
-                        Do not replace or improve meanings with dictionary definitions.
-                        If text is unclear, blurred, cut off, or partially hidden, do not guess.
-                        Omit uncertain content or mark it as needsReview.
-                        Missing uncertain content is better than creating incorrect content.
+                        You are a strict OCR transcription tool for Korean vocabulary images.
+                        Your job is NOT to solve, explain, normalize, improve, or complete the material.
+
+                        This request contains exactly one image.
+                        Return items only from this one image.
+                        Do not use text from any other image or previous request.
+                        Every returned item must use the imageNumber provided immediately before the image.
+                        Read only text that is visibly present in the image pixels.
+                        Return an item only when both a word and its meaning are explicitly visible in the image.
+                        Copy word exactly as visible. Copy meaning exactly as visible.
+                        Do not add words that are not visible in the image.
+                        Do not add meanings that are not visible in the image.
+                        Do not infer missing letters, complete cropped text, correct spelling, paraphrase, summarize, translate, or supplement content.
+                        Do not use dictionary knowledge, Korean language knowledge, context, textbook patterns, or common sense to fill any value.
+                        If either word or meaning is unclear, blurred, cut off, partially hidden, or not explicitly paired, omit the item.
+                        If a visible item is readable but category is uncertain, include it with needsReview true and low confidence.
+                        It is better to return fewer items or an empty items array than to create content not visible in the image.
+
                         Return only word, meaning, category, needsReview, confidence, and imageNumber.
-                        Exclude problem numbers, page numbers, unit titles, examples, explanatory sentences, headers, and non-target descriptions.
                         Categories must be one of NATIVE_KOREAN, SINO_KOREAN, LOANWORD, PROVERB, IDIOM.
-                        Category may be classified by AI. If classification is uncertain, choose the closest category, set needsReview true, and lower confidence.
+                        Category may be classified by AI only after word and meaning have been copied from visible text.
                         """
         ));
 
-        for (VocabularyImageFile image : images) {
-            parts.add(Map.of(
-                    "text", "The next image is imageNumber " + image.imageNumber() + "."
-            ));
-            parts.add(Map.of(
-                    "inlineData", Map.of(
-                            "mimeType", image.mediaType(),
-                            "data", Base64.getEncoder().encodeToString(image.content())
-                    )
-            ));
-        }
+        parts.add(Map.of(
+                "text", "The only image in this request is imageNumber " + image.imageNumber() + "."
+        ));
+        parts.add(Map.of(
+                "inlineData", Map.of(
+                        "mimeType", image.mediaType(),
+                        "data", Base64.getEncoder().encodeToString(image.content())
+                )
+        ));
 
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("type", "object");
