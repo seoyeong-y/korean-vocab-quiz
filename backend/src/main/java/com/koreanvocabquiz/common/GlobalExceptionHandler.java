@@ -5,6 +5,7 @@ import java.util.List;
 import com.koreanvocabquiz.quiz.QuizGenerationException;
 import com.koreanvocabquiz.quiz.QuizSubmissionException;
 import com.koreanvocabquiz.vocabulary.InvalidCsvException;
+import com.koreanvocabquiz.vocabulary.VocabularyImageExtractionException;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -44,6 +45,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InvalidCsvException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidCsv(InvalidCsvException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        List.of(exception.getMessage())
+                ));
+    }
+
+    @ExceptionHandler(VocabularyImageExtractionException.class)
+    public ResponseEntity<ApiErrorResponse> handleVocabularyImageExtraction(VocabularyImageExtractionException exception) {
         return ResponseEntity.badRequest()
                 .body(ApiErrorResponse.of(
                         HttpStatus.BAD_REQUEST.value(),

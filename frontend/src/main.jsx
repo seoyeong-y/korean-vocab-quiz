@@ -5,7 +5,9 @@ import {
   createWrongAnswerReviewQuiz,
   deleteAllWrongAnswers,
   deleteWrongAnswer,
+  extractVocabularyFromImages,
   getWrongAnswers,
+  saveVocabularyBatch,
   submitQuizAnswer,
 } from './api';
 import './styles.css';
@@ -239,7 +241,12 @@ function App() {
           onChange={setSettings}
           onStart={handleStart}
           onOpenWrongAnswers={loadWrongAnswers}
+          onOpenAdmin={() => setScreen('admin')}
         />
+      )}
+
+      {screen === 'admin' && (
+        <AdminImageVocabularyScreen onBack={handleRetry} />
       )}
 
       {screen === 'wrongAnswers' && (
@@ -288,7 +295,7 @@ function App() {
   );
 }
 
-function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongAnswers }) {
+function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongAnswers, onOpenAdmin }) {
   const questionCountValue = Number(settings.questionCount);
   const selectedQuestionCountOption = questionCountPresets.includes(questionCountValue)
     ? String(questionCountValue)
@@ -432,7 +439,232 @@ function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongA
             오답노트 보기
           </button>
         </div>
+
+        <div className="admin-link-row">
+          <button className="secondary-button subtle-button" disabled={loading} type="button" onClick={onOpenAdmin}>
+            관리자 이미지 추출
+          </button>
+        </div>
       </form>
+    </section>
+  );
+}
+
+function AdminImageVocabularyScreen({ onBack }) {
+  const [files, setFiles] = React.useState([]);
+  const [items, setItems] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [saveResult, setSaveResult] = React.useState(null);
+
+  const selectedCount = items.filter((item) => item.selected).length;
+
+  function handleFileChange(event) {
+    setFiles(Array.from(event.target.files || []));
+    setError('');
+    setSaveResult(null);
+  }
+
+  async function handleExtract(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+    setSaveResult(null);
+
+    try {
+      const response = await extractVocabularyFromImages(files);
+      const extractedItems = (response.items || []).map((item, index) => ({
+        ...item,
+        localId: `${item.imageNumber}-${item.rowNumber}-${index}`,
+        selected: true,
+      }));
+      setItems(extractedItems);
+      if (extractedItems.length === 0) {
+        setError('이미지에서 어휘를 찾지 못했습니다.');
+      }
+    } catch (extractError) {
+      setError(normalizeError(extractError.message));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function updateItem(localId, field, value) {
+    setItems((previousItems) => previousItems.map((item) => (
+      item.localId === localId ? { ...item, [field]: value } : item
+    )));
+  }
+
+  function removeItem(localId) {
+    setItems((previousItems) => previousItems.filter((item) => item.localId !== localId));
+  }
+
+  function setAllSelected(selected) {
+    setItems((previousItems) => previousItems.map((item) => ({ ...item, selected })));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setError('');
+    setSaveResult(null);
+
+    try {
+      const response = await saveVocabularyBatch(
+        items
+          .filter((item) => item.selected)
+          .map((item) => ({
+            word: item.word,
+            meaning: item.meaning,
+            category: item.category,
+          }))
+      );
+      setSaveResult(response);
+    } catch (saveError) {
+      setError(normalizeError(saveError.message));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="panel admin-panel" aria-labelledby="admin-title">
+      <div className="screen-heading">
+        <div>
+          <p className="eyebrow">관리자</p>
+          <h1 id="admin-title">이미지 어휘 추출</h1>
+          <p className="screen-description">
+            책이나 학습자료 이미지를 분석한 뒤, 검수 완료한 어휘만 저장합니다.
+          </p>
+        </div>
+        <button className="secondary-button" disabled={loading || saving} type="button" onClick={onBack}>
+          처음 화면
+        </button>
+      </div>
+
+      <form className="upload-form" onSubmit={handleExtract}>
+        <label className="file-drop-label" htmlFor="image-files">
+          <span>이미지 선택</span>
+          <small>jpg, jpeg, png, webp / 최대 5장 / 파일당 5MB 이하</small>
+          <input
+            accept="image/jpeg,image/png,image/webp"
+            disabled={loading || saving}
+            id="image-files"
+            multiple
+            type="file"
+            onChange={handleFileChange}
+          />
+        </label>
+
+        <div className="admin-action-row">
+          <button className="primary-button" disabled={loading || saving || files.length === 0} type="submit">
+            {loading ? 'AI 추출 중' : '이미지에서 어휘 추출'}
+          </button>
+          <span className="field-hint">{files.length}개 이미지 선택됨</span>
+        </div>
+      </form>
+
+      {loading && <p className="status-message">이미지를 분석하는 중입니다. API 비용이 발생할 수 있습니다.</p>}
+      {error && <ErrorMessage message={error} />}
+
+      {items.length === 0 && !loading && !error && (
+        <div className="empty-state admin-empty-state">
+          <strong>아직 추출된 어휘가 없습니다.</strong>
+          <span>이미지를 업로드하면 AI가 후보를 만들고, 이 화면에서 검수 후 저장할 수 있습니다.</span>
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div className="review-workspace">
+          <div className="review-toolbar">
+            <div>
+              <strong>추출된 전체 항목 {items.length}개</strong>
+              <span>선택된 항목 {selectedCount}개</span>
+            </div>
+            <div className="action-row">
+              <button className="secondary-button" disabled={saving} type="button" onClick={() => setAllSelected(true)}>
+                전체 선택
+              </button>
+              <button className="secondary-button" disabled={saving} type="button" onClick={() => setAllSelected(false)}>
+                전체 선택 해제
+              </button>
+            </div>
+          </div>
+
+          <div className="admin-item-list" role="list">
+            {items.map((item) => (
+              <article className={item.needsReview ? 'admin-item needs-review' : 'admin-item'} key={item.localId} role="listitem">
+                <div className="admin-item-header">
+                  <label className="admin-checkbox">
+                    <input
+                      checked={item.selected}
+                      disabled={saving}
+                      type="checkbox"
+                      onChange={(event) => updateItem(item.localId, 'selected', event.target.checked)}
+                    />
+                    저장
+                  </label>
+                  <div className="admin-badges">
+                    <span className="category-badge">이미지 {item.imageNumber}</span>
+                    {item.needsReview && <span className="review-badge">검토 필요</span>}
+                  </div>
+                </div>
+
+                <div className="admin-edit-grid">
+                  <label className="field-label">
+                    <span>word</span>
+                    <input
+                      disabled={saving}
+                      value={item.word}
+                      onChange={(event) => updateItem(item.localId, 'word', event.target.value)}
+                    />
+                  </label>
+                  <label className="field-label">
+                    <span>meaning</span>
+                    <input
+                      disabled={saving}
+                      value={item.meaning}
+                      onChange={(event) => updateItem(item.localId, 'meaning', event.target.value)}
+                    />
+                  </label>
+                  <label className="field-label">
+                    <span>category</span>
+                    <select
+                      disabled={saving}
+                      value={item.category}
+                      onChange={(event) => updateItem(item.localId, 'category', event.target.value)}
+                    >
+                      {categories.map((category) => (
+                        <option key={category.value} value={category.value}>
+                          {category.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <button className="danger-button quiet-danger" disabled={saving} type="button" onClick={() => removeItem(item.localId)}>
+                  행 삭제
+                </button>
+              </article>
+            ))}
+          </div>
+
+          <div className="save-panel">
+            <button
+              className="primary-button"
+              disabled={saving || selectedCount === 0}
+              type="button"
+              onClick={handleSave}
+            >
+              {saving ? '저장 중' : '검수 완료 및 저장'}
+            </button>
+            <span className="field-hint">선택된 항목만 DB에 저장됩니다.</span>
+          </div>
+        </div>
+      )}
+
+      {saveResult && <BatchSaveResult result={saveResult} />}
     </section>
   );
 }
@@ -692,6 +924,47 @@ function ResultScreen({ totalCount, correctCount, incorrectCount, accuracy, quiz
   );
 }
 
+function BatchSaveResult({ result }) {
+  return (
+    <section className="save-result" aria-labelledby="save-result-title">
+      <h2 id="save-result-title">저장 결과</h2>
+      <dl className="result-grid compact-result-grid">
+        <div>
+          <dt>전체 처리 건수</dt>
+          <dd>{result.totalCount}</dd>
+        </div>
+        <div>
+          <dt>저장 성공</dt>
+          <dd>{result.successCount}</dd>
+        </div>
+        <div>
+          <dt>중복 건너뜀</dt>
+          <dd>{result.skippedCount}</dd>
+        </div>
+        <div>
+          <dt>실패</dt>
+          <dd>{result.failedCount}</dd>
+        </div>
+      </dl>
+
+      {(result.skippedRows?.length > 0 || result.failedRows?.length > 0) && (
+        <div className="row-result-list">
+          {result.skippedRows?.map((row) => (
+            <p key={`skipped-${row.rowNumber}`}>
+              skipped #{row.rowNumber}: {row.reason}
+            </p>
+          ))}
+          {result.failedRows?.map((row) => (
+            <p key={`failed-${row.rowNumber}`}>
+              failed #{row.rowNumber}: {row.reason}
+            </p>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ErrorMessage({ message }) {
   return <p className="error-message">{message}</p>;
 }
@@ -764,6 +1037,24 @@ function normalizeError(message) {
   }
   if (message.includes('questionCount')) {
     return '문제 수가 출제 가능한 어휘 수보다 많습니다.';
+  }
+  if (message.includes('Only jpg')) {
+    return '지원하지 않는 파일 형식입니다. jpg, jpeg, png, webp 이미지만 업로드해 주세요.';
+  }
+  if (message.includes('5MB')) {
+    return '파일 크기가 너무 큽니다. 이미지당 5MB 이하로 업로드해 주세요.';
+  }
+  if (message.includes('AI API call failed')) {
+    return 'AI API 호출에 실패했습니다. 잠시 후 다시 시도해 주세요.';
+  }
+  if (message.includes('No vocabulary entries')) {
+    return '이미지에서 어휘를 찾지 못했습니다.';
+  }
+  if (message.includes('AI response format')) {
+    return 'AI 응답 형식이 올바르지 않습니다.';
+  }
+  if (message.includes('invalid category')) {
+    return 'AI가 분류한 category를 검증하지 못했습니다.';
   }
   return message;
 }
