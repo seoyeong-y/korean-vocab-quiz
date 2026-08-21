@@ -89,6 +89,8 @@ public class GeminiVocabularyImageAnalysisClient implements VocabularyImageAnaly
                         Read only text that is visibly present in the image pixels.
                         Return an item only when both a word and its meaning are explicitly visible in the image.
                         Copy word exactly as visible. Copy meaning exactly as visible.
+                        For loanword notation questions where two Korean spellings are visible and one is marked as the correct spelling, use the correct Korean spelling as word.
+                        In that loanword case, use only the visibly shown original foreign word, such as English, as meaning.
                         If one visible word has multiple meanings marked with number symbols such as ① ② ③ ④ ⑤, return one item for that word.
                         Keep those numbered meanings together in a single meaning string, preserving the visible number symbols.
                         Do not split numbered meanings for the same word into separate items.
