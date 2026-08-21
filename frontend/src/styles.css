@@ -40,13 +40,15 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
 button:focus-visible,
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+textarea:focus-visible {
   outline: 3px solid rgb(31 111 235 / 28%);
   outline-offset: 3px;
 }
@@ -250,7 +252,8 @@ legend small,
   gap: var(--space-2);
 }
 
-.field-label input {
+.field-label input,
+.field-label textarea {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -258,6 +261,11 @@ legend small,
   min-height: 48px;
   padding: 10px 12px;
   width: 150px;
+}
+
+.field-label textarea {
+  line-height: 1.55;
+  resize: vertical;
 }
 
 .field-label select {
@@ -270,6 +278,7 @@ legend small,
 }
 
 .field-label input:disabled,
+.field-label textarea:disabled,
 .field-label select:disabled {
   background: var(--color-surface-soft);
   color: var(--color-muted);
@@ -787,6 +796,7 @@ dd {
 }
 
 .admin-edit-grid .field-label input,
+.admin-edit-grid .field-label textarea,
 .admin-edit-grid .field-label select {
   width: 100%;
 }
@@ -874,6 +884,7 @@ dd {
   }
 
   .field-label input,
+  .field-label textarea,
   .field-label select,
   .primary-button,
   .secondary-button,
