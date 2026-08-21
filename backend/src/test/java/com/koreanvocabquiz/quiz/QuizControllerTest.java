@@ -17,6 +17,8 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.koreanvocabquiz.wronganswer.WrongAnswer;
+import com.koreanvocabquiz.wronganswer.WrongAnswerRepository;
 import com.koreanvocabquiz.vocabulary.Vocabulary;
 import com.koreanvocabquiz.vocabulary.VocabularyCategory;
 import com.koreanvocabquiz.vocabulary.VocabularyRepository;
@@ -46,6 +48,12 @@ class QuizControllerTest {
     private VocabularyRepository vocabularyRepository;
 
     @Autowired
+    private MasteredVocabularyRepository masteredVocabularyRepository;
+
+    @Autowired
+    private WrongAnswerRepository wrongAnswerRepository;
+
+    @Autowired
     private QuizQuestionSessionStore sessionStore;
 
     @Autowired
@@ -56,6 +64,8 @@ class QuizControllerTest {
 
     @BeforeEach
     void setUp() {
+        masteredVocabularyRepository.deleteAll();
+        wrongAnswerRepository.deleteAll();
         vocabularyRepository.deleteAll();
 
         apple = vocabularyRepository.save(new Vocabulary("사과", "apple", VocabularyCategory.NOUN, null));
@@ -111,6 +121,29 @@ class QuizControllerTest {
     }
 
     @Test
+    void createMixedQuizWithResolvedQuestionModes() throws Exception {
+        mockMvc.perform(post("/api/quizzes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "NOUN",
+                                  "mode": "MIXED",
+                                  "questionCount": 4
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(4)))
+                .andExpect(jsonPath("$[*].mode", containsInAnyOrder(
+                        matchesPattern("WORD_TO_MEANING|MEANING_TO_WORD"),
+                        matchesPattern("WORD_TO_MEANING|MEANING_TO_WORD"),
+                        matchesPattern("WORD_TO_MEANING|MEANING_TO_WORD"),
+                        matchesPattern("WORD_TO_MEANING|MEANING_TO_WORD")
+                )))
+                .andExpect(jsonPath("$[0].mode").value(not("MIXED")))
+                .andExpect(jsonPath("$[0].correctAnswer").doesNotExist());
+    }
+
+    @Test
     void createFourDifferentOptions() throws Exception {
         mockMvc.perform(post("/api/quizzes")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -159,6 +192,89 @@ class QuizControllerTest {
                 .andExpect(jsonPath("$.correct").value(false))
                 .andExpect(jsonPath("$.correctAnswer").value("사과"))
                 .andExpect(jsonPath("$.vocabularyId").value(apple.getId()));
+    }
+
+    @Test
+    void markGeneratedQuestionAsMastered() throws Exception {
+        QuizQuestionResponse question = createOneQuestion("WORD_TO_MEANING");
+
+        mockMvc.perform(post("/api/quizzes/mastered")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s"
+                                }
+                                """.formatted(question.questionId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mastered").value(true))
+                .andExpect(jsonPath("$.correctAnswer").exists())
+                .andExpect(jsonPath("$.vocabularyId").value(question.vocabularyId()));
+
+        assertEquals(1, masteredVocabularyRepository.count());
+    }
+
+    @Test
+    void rejectMasteredRequestWithoutGeneratedQuestion() throws Exception {
+        mockMvc.perform(post("/api/quizzes/mastered")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s"
+                                }
+                                """.formatted(UUID.randomUUID())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.messages[0]").value("Question is not valid or has expired."));
+    }
+
+    @Test
+    void excludeMasteredVocabularyFromGeneralQuiz() throws Exception {
+        vocabularyRepository.save(new Vocabulary("수박", "watermelon", VocabularyCategory.NOUN, null));
+        QuizQuestionResponse question = createOneQuestion("WORD_TO_MEANING");
+        mockMvc.perform(post("/api/quizzes/mastered")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s"
+                                }
+                                """.formatted(question.questionId())))
+                .andExpect(status().isOk());
+
+        String content = mockMvc.perform(post("/api/quizzes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "NOUN",
+                                  "mode": "WORD_TO_MEANING",
+                                  "questionCount": 3
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        List<QuizQuestionResponse> questions = objectMapper.readValue(content, new TypeReference<>() {
+        });
+        assertEquals(0, questions.stream()
+                .filter(nextQuestion -> nextQuestion.vocabularyId().equals(question.vocabularyId()))
+                .count());
+    }
+
+    @Test
+    void removeWrongAnswerWhenMarkingVocabularyAsMastered() throws Exception {
+        wrongAnswerRepository.save(new WrongAnswer(apple, QuizMode.WORD_TO_MEANING));
+        TestSession session = saveSession(apple, apple, QuizMode.WORD_TO_MEANING);
+
+        mockMvc.perform(post("/api/quizzes/mastered")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s"
+                                }
+                                """.formatted(session.questionId())))
+                .andExpect(status().isOk());
+
+        assertEquals(0, wrongAnswerRepository.count());
     }
 
     @Test

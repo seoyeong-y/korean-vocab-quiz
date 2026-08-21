@@ -15,4 +15,6 @@ public interface WrongAnswerRepository extends JpaRepository<WrongAnswer, Long> 
     List<WrongAnswer> findAllByOrderByLastWrongAtDesc();
 
     Optional<WrongAnswer> findByVocabularyAndQuizMode(Vocabulary vocabulary, QuizMode quizMode);
+
+    void deleteByVocabulary(Vocabulary vocabulary);
 }

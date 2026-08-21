@@ -7,6 +7,7 @@ import {
   deleteWrongAnswer,
   extractVocabularyFromImages,
   getWrongAnswers,
+  markQuizQuestionMastered,
   saveVocabularyBatch,
   submitQuizAnswer,
 } from './api';
@@ -26,9 +27,14 @@ const categories = [
   { value: 'FOUR_CHARACTER_IDIOM', label: '사자성어', description: '네 글자 한자 성어' },
 ];
 
-const quizModes = [
+const reviewQuizModes = [
   { value: 'WORD_TO_MEANING', label: '단어 보고 뜻 맞히기', shortLabel: '단어 → 뜻' },
   { value: 'MEANING_TO_WORD', label: '뜻 보고 단어 맞히기', shortLabel: '뜻 → 단어' },
+];
+
+const quizModes = [
+  ...reviewQuizModes,
+  { value: 'MIXED', label: '두 방식 섞어서 풀기', shortLabel: '랜덤 혼합' },
 ];
 
 const questionCountPresets = [5, 10, 20];
@@ -214,6 +220,37 @@ function App() {
     }
   }
 
+  async function handleMarkMastered() {
+    if (!currentQuestion || feedback || submitting) {
+      return;
+    }
+
+    setSubmitting(true);
+    setError('');
+
+    try {
+      const result = await markQuizQuestionMastered({
+        questionId: currentQuestion.questionId,
+      });
+
+      const answer = {
+        vocabularyId: currentQuestion.vocabularyId,
+        selectedOptionId: null,
+        selectedText: '완벽하게 알아요',
+        correct: true,
+        correctAnswer: result.correctAnswer,
+        mastered: true,
+      };
+
+      setFeedback(answer);
+      setAnswers((previousAnswers) => [...previousAnswers, answer]);
+    } catch (masteredError) {
+      setError(normalizeError(masteredError.message));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   function handleNext() {
     if (currentIndex === questions.length - 1) {
       setScreen('result');
@@ -282,6 +319,7 @@ function App() {
           submitting={submitting}
           error={error}
           onSelectOption={handleSelectOption}
+          onMarkMastered={handleMarkMastered}
           onNext={handleNext}
         />
       )}
@@ -813,7 +851,7 @@ function WrongAnswerScreen({
                 <small>틀렸던 방향 그대로 다시 풀어볼 수 있습니다.</small>
               </legend>
               <div className="mode-group">
-                {quizModes.map((mode) => (
+                {reviewQuizModes.map((mode) => (
                   <label className="choice" key={mode.value}>
                     <input
                       checked={settings.mode === mode.value}
@@ -901,6 +939,7 @@ function QuizScreen({
   submitting,
   error,
   onSelectOption,
+  onMarkMastered,
   onNext,
 }) {
   return (
@@ -937,11 +976,21 @@ function QuizScreen({
         ))}
       </div>
 
+      <button
+        className="mastered-button"
+        disabled={Boolean(feedback) || submitting}
+        type="button"
+        onClick={onMarkMastered}
+      >
+        완벽하게 알아요
+      </button>
+
       {submitting && <p className="status-message">정답 확인 중</p>}
       {error && <ErrorMessage message={error} />}
       {feedback && (
         <div className={feedback.correct ? 'feedback correct' : 'feedback incorrect'} aria-live="polite">
-          <strong>{feedback.correct ? '정답입니다.' : '오답입니다.'}</strong>
+          <strong>{feedback.mastered ? '숙지 어휘로 기록했습니다.' : feedback.correct ? '정답입니다.' : '오답입니다.'}</strong>
+          {feedback.mastered && <span>앞으로 일반 퀴즈와 오답 복습에서 제외됩니다.</span>}
           {!feedback.correct && <span>정답: {feedback.correctAnswer}</span>}
         </div>
       )}

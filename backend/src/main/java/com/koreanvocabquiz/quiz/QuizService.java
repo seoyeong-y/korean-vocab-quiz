@@ -6,6 +6,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 import com.koreanvocabquiz.common.ResourceNotFoundException;
 import com.koreanvocabquiz.vocabulary.Vocabulary;
@@ -24,21 +26,28 @@ public class QuizService {
     private final VocabularyRepository vocabularyRepository;
     private final WrongAnswerService wrongAnswerService;
     private final QuizQuestionSessionStore sessionStore;
+    private final MasteredVocabularyRepository masteredVocabularyRepository;
 
     public QuizService(
             VocabularyRepository vocabularyRepository,
             WrongAnswerService wrongAnswerService,
-            QuizQuestionSessionStore sessionStore
+            QuizQuestionSessionStore sessionStore,
+            MasteredVocabularyRepository masteredVocabularyRepository
     ) {
         this.vocabularyRepository = vocabularyRepository;
         this.wrongAnswerService = wrongAnswerService;
         this.sessionStore = sessionStore;
+        this.masteredVocabularyRepository = masteredVocabularyRepository;
     }
 
     public List<QuizQuestionResponse> create(QuizCreateRequest request) {
         List<Vocabulary> vocabularies = vocabularyRepository.findByCategory(request.category());
+        Set<Long> masteredVocabularyIds = masteredVocabularyRepository.findMasteredVocabularyIds();
+        List<Vocabulary> quizVocabularies = vocabularies.stream()
+                .filter(vocabulary -> !masteredVocabularyIds.contains(vocabulary.getId()))
+                .toList();
 
-        return createFromVocabularies(vocabularies, request.mode(), request.questionCount());
+        return createFromVocabularies(quizVocabularies, request.mode(), request.questionCount());
     }
 
     public List<QuizQuestionResponse> createFromVocabularies(List<Vocabulary> vocabularies, QuizMode mode, int questionCount) {
@@ -63,7 +72,7 @@ public class QuizService {
 
         return questions.stream()
                 .limit(questionCount)
-                .map(vocabulary -> createQuestion(vocabulary, optionSourceVocabularies, mode))
+                .map(vocabulary -> createQuestion(vocabulary, optionSourceVocabularies, resolveMode(mode)))
                 .toList();
     }
 
@@ -88,6 +97,22 @@ public class QuizService {
         }
 
         return new QuizSubmitResponse(correct, session.correctAnswer(), correctVocabulary.getId());
+    }
+
+    @Transactional
+    public QuizMasteredResponse markMastered(QuizMasteredRequest request) {
+        QuizQuestionSession session = sessionStore.findValid(request.questionId())
+                .orElseThrow(() -> new QuizSubmissionException("Question is not valid or has expired."));
+
+        Vocabulary vocabulary = vocabularyRepository.findById(session.vocabularyId())
+                .orElseThrow(() -> new ResourceNotFoundException("Vocabulary not found. id=" + session.vocabularyId()));
+
+        if (!masteredVocabularyRepository.existsByVocabulary(vocabulary)) {
+            masteredVocabularyRepository.save(new MasteredVocabulary(vocabulary));
+        }
+        wrongAnswerService.deleteByVocabulary(vocabulary);
+
+        return new QuizMasteredResponse(true, session.correctAnswer(), vocabulary.getId());
     }
 
     private QuizQuestionResponse createQuestion(Vocabulary vocabulary, List<Vocabulary> optionSourceVocabularies, QuizMode mode) {
@@ -152,10 +177,21 @@ public class QuizService {
                 .toList();
     }
 
+    private QuizMode resolveMode(QuizMode mode) {
+        if (mode != QuizMode.MIXED) {
+            return mode;
+        }
+
+        return ThreadLocalRandom.current().nextBoolean()
+                ? QuizMode.WORD_TO_MEANING
+                : QuizMode.MEANING_TO_WORD;
+    }
+
     private String questionText(Vocabulary vocabulary, QuizMode mode) {
         return switch (mode) {
             case WORD_TO_MEANING -> vocabulary.getWord();
             case MEANING_TO_WORD -> vocabulary.getMeaning();
+            case MIXED -> throw new IllegalArgumentException("MIXED mode must be resolved before creating a question.");
         };
     }
 
@@ -163,6 +199,7 @@ public class QuizService {
         return switch (mode) {
             case WORD_TO_MEANING -> vocabulary.getMeaning();
             case MEANING_TO_WORD -> vocabulary.getWord();
+            case MIXED -> throw new IllegalArgumentException("MIXED mode must be resolved before creating options.");
         };
     }
 }
