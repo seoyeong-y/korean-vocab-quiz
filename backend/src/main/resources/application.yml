@@ -31,3 +31,7 @@ server:
 app:
   cors:
     allowed-origin: ${APP_CORS_ALLOWED_ORIGIN:http://localhost:5173}
+
+openai:
+  api-key: ${OPENAI_API_KEY:}
+  vision-model: ${OPENAI_VISION_MODEL:gpt-4.1-mini}

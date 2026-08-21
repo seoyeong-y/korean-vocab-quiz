@@ -40,6 +40,16 @@ public class VocabularyController {
         return vocabularyService.uploadCsv(file);
     }
 
+    @PostMapping(value = "/image/extract", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public VocabularyImageExtractionResponse extractFromImages(@RequestPart("files") List<MultipartFile> files) {
+        return vocabularyService.extractFromImages(files);
+    }
+
+    @PostMapping("/batch")
+    public VocabularyCsvUploadResponse saveBatch(@RequestBody VocabularyBatchSaveRequest request) {
+        return vocabularyService.saveBatch(request);
+    }
+
     @GetMapping
     public List<VocabularyResponse> findAll() {
         return vocabularyService.findAll();

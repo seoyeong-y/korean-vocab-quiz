@@ -58,6 +58,16 @@ APP_CORS_ALLOWED_ORIGIN
 VITE_API_BASE_URL
 ```
 
+Optional AI extraction variables:
+
+```text
+OPENAI_API_KEY
+OPENAI_VISION_MODEL
+```
+
+`OPENAI_API_KEY`는 이미지 기반 어휘 추출 기능에서만 백엔드가 사용합니다.
+프론트엔드로 전달하거나 Git에 커밋하지 마세요.
+
 ## Run With Docker Compose
 
 ```bash
@@ -116,6 +126,8 @@ npm run build
 | `PUT` | `/api/vocabularies/{id}` | 어휘 수정 |
 | `DELETE` | `/api/vocabularies/{id}` | 어휘 삭제 |
 | `POST` | `/api/vocabularies/csv` | CSV 어휘 대량 등록 |
+| `POST` | `/api/vocabularies/image/extract` | 이미지 기반 어휘 후보 추출 |
+| `POST` | `/api/vocabularies/batch` | 검수 완료 어휘 일괄 저장 |
 | `POST` | `/api/quizzes` | 퀴즈 생성 |
 | `POST` | `/api/quizzes/submit` | 정답 제출 |
 | `GET` | `/api/wrong-answers` | 오답 목록 조회 |
@@ -211,6 +223,106 @@ Response example:
   ]
 }
 ```
+
+## Admin Image Vocabulary Extraction
+
+관리자 화면에서는 책이나 학습자료 이미지를 업로드해 AI가 어휘 후보를 추출하도록 할 수 있습니다.
+이 기능은 AI가 DB 저장까지 자동으로 수행하지 않습니다.
+
+처리 흐름:
+
+1. 관리자 화면에서 이미지 업로드
+2. 백엔드가 OpenAI Vision API로 `word`, `meaning`, `category`, `needsReview` 후보 추출
+3. 추출 결과를 DB에 저장하지 않고 프론트 검수 화면에 표시
+4. 관리자가 저장 여부, 단어, 뜻, 카테고리를 확인 및 수정
+5. `검수 완료 및 저장` 버튼 클릭
+6. 선택된 최종 데이터만 `/api/vocabularies/batch`로 저장
+
+Supported image formats:
+
+```text
+jpg
+jpeg
+png
+webp
+```
+
+Limits:
+
+- 한 번에 최대 5장까지 업로드할 수 있습니다.
+- 이미지 파일 1개는 5MB 이하여야 합니다.
+- 업로드 MIME type은 `image/jpeg`, `image/png`, `image/webp`만 허용합니다.
+
+AI category classification:
+
+- `NATIVE_KOREAN`: 고유어
+- `SINO_KOREAN`: 한자어
+- `LOANWORD`: 외래어
+- `PROVERB`: 속담
+- `IDIOM`: 관용어
+
+AI가 분류를 확신하기 어려운 항목은 `needsReview: true`로 표시됩니다.
+그래도 DB 저장 시점에는 관리자가 최종적으로 위 카테고리 중 하나를 선택해야 합니다.
+
+Extract candidates from images:
+
+```bash
+curl -X POST http://localhost:8080/api/vocabularies/image/extract \
+  -F "files=@page-1.jpg" \
+  -F "files=@page-2.png"
+```
+
+Extraction response example:
+
+```json
+{
+  "totalCount": 1,
+  "items": [
+    {
+      "imageNumber": 1,
+      "rowNumber": 1,
+      "word": "가람",
+      "meaning": "강을 뜻하는 옛말",
+      "category": "NATIVE_KOREAN",
+      "needsReview": false,
+      "confidence": 0.91
+    }
+  ]
+}
+```
+
+Save reviewed candidates:
+
+```bash
+curl -X POST http://localhost:8080/api/vocabularies/batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {
+        "word": "가람",
+        "meaning": "강을 뜻하는 옛말",
+        "category": "NATIVE_KOREAN"
+      }
+    ]
+  }'
+```
+
+저장 결과는 CSV 대량 등록과 동일하게 `success`, `skipped`, `failed`로 집계됩니다.
+중복 기준은 `word + meaning + category`입니다.
+이미 DB에 같은 항목이 있으면 오류가 아니라 `skipped`로 처리됩니다.
+
+Failure cases shown to users:
+
+- 잘못된 파일 형식
+- 파일 크기 초과
+- AI API 호출 실패
+- 이미지에서 어휘를 찾지 못함
+- AI 응답 형식 오류
+- category 분류 실패
+- 저장 validation 실패
+
+This feature can incur OpenAI API costs when images are analyzed.
+Local MVP에서는 관리자 기능 보호가 없으므로, 공개 배포 전 인증/인가나 네트워크 접근 제한으로 관리자 화면과 API를 보호해야 합니다.
 
 ## Quiz API
 

@@ -39,12 +39,14 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible {
   outline: 3px solid rgb(31 111 235 / 28%);
   outline-offset: 3px;
 }
@@ -78,6 +80,10 @@ input:focus-visible {
 
 .wrong-answer-panel {
   max-width: 980px;
+}
+
+.admin-panel {
+  max-width: 1080px;
 }
 
 .hero-copy,
@@ -254,7 +260,17 @@ legend small,
   width: 150px;
 }
 
-.field-label input:disabled {
+.field-label select {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  min-height: 48px;
+  padding: 10px 12px;
+}
+
+.field-label input:disabled,
+.field-label select:disabled {
   background: var(--color-surface-soft);
   color: var(--color-muted);
   cursor: not-allowed;
@@ -294,6 +310,15 @@ legend small,
 
 .start-action-row .primary-button {
   min-width: 132px;
+}
+
+.admin-link-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.subtle-button {
+  color: var(--color-muted);
 }
 
 .toolbar {
@@ -386,6 +411,10 @@ legend small,
   color: var(--color-muted);
 }
 
+.admin-empty-state {
+  margin-top: var(--space-5);
+}
+
 .status-message {
   background: var(--color-warning-soft);
   border: 1px solid #f3da91;
@@ -447,6 +476,16 @@ legend small,
   border: 1px solid #c9ded9;
   border-radius: 999px;
   color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 9px;
+}
+
+.review-badge {
+  background: var(--color-warning-soft);
+  border: 1px solid #f3da91;
+  border-radius: 999px;
+  color: #6b4e00;
   font-size: 12px;
   font-weight: 800;
   padding: 4px 9px;
@@ -640,6 +679,153 @@ dd {
   padding-top: var(--space-5);
 }
 
+.upload-form,
+.review-workspace,
+.save-result {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.file-drop-label {
+  background: var(--color-surface-soft);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-5);
+}
+
+.file-drop-label span {
+  color: var(--color-text);
+  font-weight: 900;
+}
+
+.file-drop-label small {
+  color: var(--color-muted);
+  font-weight: 650;
+}
+
+.file-drop-label input {
+  margin-top: var(--space-2);
+  max-width: 100%;
+  min-width: 0;
+}
+
+.admin-action-row,
+.review-toolbar,
+.save-panel {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.review-toolbar {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--space-4);
+}
+
+.review-toolbar > div:first-child {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.review-toolbar span {
+  color: var(--color-muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.admin-item-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.admin-item {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.admin-item.needs-review {
+  background: #fffdf5;
+  border-color: #efd078;
+}
+
+.admin-item-header,
+.admin-badges {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+  justify-content: space-between;
+}
+
+.admin-checkbox {
+  align-items: center;
+  color: var(--color-text);
+  display: flex;
+  font-weight: 900;
+  gap: var(--space-2);
+}
+
+.admin-checkbox input {
+  accent-color: var(--color-primary);
+}
+
+.admin-edit-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 1fr 2fr minmax(160px, 0.7fr);
+}
+
+.admin-edit-grid .field-label input,
+.admin-edit-grid .field-label select {
+  width: 100%;
+}
+
+.save-panel {
+  border-top: 1px solid var(--color-border);
+  justify-content: flex-start;
+  padding-top: var(--space-4);
+}
+
+.save-result {
+  margin-top: var(--space-5);
+}
+
+.save-result h2 {
+  font-size: 24px;
+  margin: 0;
+}
+
+.compact-result-grid {
+  margin: 0;
+}
+
+.row-result-list {
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+}
+
+.row-result-list p {
+  color: var(--color-muted);
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+}
+
 @media (max-width: 820px) {
   .app-shell {
     align-items: flex-start;
@@ -672,6 +858,9 @@ dd {
   .form-row,
   .custom-count-row,
   .start-action-row,
+  .admin-action-row,
+  .review-toolbar,
+  .save-panel,
   .quiz-header,
   .screen-heading,
   .toolbar,
@@ -685,10 +874,21 @@ dd {
   }
 
   .field-label input,
+  .field-label select,
   .primary-button,
   .secondary-button,
   .danger-button {
     width: 100%;
+  }
+
+  .admin-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-item-header,
+  .admin-badges {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .start-action-row .primary-button {
