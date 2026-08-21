@@ -1,11 +1,14 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import {
+  completeQuiz,
   createQuiz,
   createWrongAnswerReviewQuiz,
   deleteAllWrongAnswers,
   deleteWrongAnswer,
   extractVocabularyFromImages,
+  getMasteredVocabularies,
+  getStatisticsDashboard,
   getWrongAnswers,
   markQuizQuestionMastered,
   saveVocabularyBatch,
@@ -59,6 +62,9 @@ function App() {
   const [selectedOptionId, setSelectedOptionId] = React.useState(null);
   const [feedback, setFeedback] = React.useState(null);
   const [wrongAnswers, setWrongAnswers] = React.useState([]);
+  const [masteredVocabularies, setMasteredVocabularies] = React.useState([]);
+  const [statisticsDashboard, setStatisticsDashboard] = React.useState(null);
+  const [quizHistorySaved, setQuizHistorySaved] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -78,6 +84,7 @@ function App() {
     setCurrentIndex(0);
     setSelectedOptionId(null);
     setFeedback(null);
+    setQuizHistorySaved(false);
     setQuizType('general');
 
     try {
@@ -127,6 +134,7 @@ function App() {
     setCurrentIndex(0);
     setSelectedOptionId(null);
     setFeedback(null);
+    setQuizHistorySaved(false);
     setQuizType('review');
 
     try {
@@ -181,6 +189,28 @@ function App() {
       setWrongAnswers([]);
     } catch (deleteError) {
       setError(normalizeError(deleteError.message));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadMyPage() {
+    setLoading(true);
+    setError('');
+
+    try {
+      const [dashboard, wrongItems, masteredItems] = await Promise.all([
+        getStatisticsDashboard(),
+        getWrongAnswers(),
+        getMasteredVocabularies(),
+      ]);
+      setStatisticsDashboard(dashboard);
+      setWrongAnswers(Array.isArray(wrongItems) ? wrongItems : []);
+      setMasteredVocabularies(Array.isArray(masteredItems) ? masteredItems : []);
+      setScreen('myPage');
+    } catch (pageError) {
+      setError(normalizeError(pageError.message));
+      setScreen('myPage');
     } finally {
       setLoading(false);
     }
@@ -251,8 +281,28 @@ function App() {
     }
   }
 
-  function handleNext() {
+  async function handleNext() {
     if (currentIndex === questions.length - 1) {
+      if (quizType === 'general' && !quizHistorySaved) {
+        setSubmitting(true);
+        setError('');
+
+        try {
+          await completeQuiz({
+            category: settings.category,
+            mode: settings.mode,
+            questionIds: questions.map((question) => question.questionId),
+            wrongAnswerReview: false,
+          });
+          setQuizHistorySaved(true);
+        } catch (completionError) {
+          setError(normalizeError(completionError.message));
+          setSubmitting(false);
+          return;
+        }
+
+        setSubmitting(false);
+      }
       setScreen('result');
       return;
     }
@@ -260,6 +310,7 @@ function App() {
     setCurrentIndex((index) => index + 1);
     setSelectedOptionId(null);
     setFeedback(null);
+    setQuizHistorySaved(false);
     setError('');
   }
 
@@ -284,6 +335,7 @@ function App() {
           onChange={setSettings}
           onStart={handleStart}
           onOpenWrongAnswers={loadWrongAnswers}
+          onOpenMyPage={loadMyPage}
           onOpenAdmin={() => setScreen('admin')}
         />
       )}
@@ -304,6 +356,18 @@ function App() {
           onDelete={handleDeleteWrongAnswer}
           onDeleteAll={handleDeleteAllWrongAnswers}
           onStartReview={handleStartReview}
+        />
+      )}
+
+      {screen === 'myPage' && (
+        <MyPageScreen
+          dashboard={statisticsDashboard}
+          wrongAnswers={wrongAnswers}
+          masteredVocabularies={masteredVocabularies}
+          loading={loading}
+          error={error}
+          onBack={handleRetry}
+          onRefresh={loadMyPage}
         />
       )}
 
@@ -333,13 +397,14 @@ function App() {
           quizType={quizType}
           onRetry={handleRetry}
           onWrongAnswers={loadWrongAnswers}
+          onMyPage={loadMyPage}
         />
       )}
     </main>
   );
 }
 
-function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongAnswers, onOpenAdmin }) {
+function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongAnswers, onOpenMyPage, onOpenAdmin }) {
   const questionCountValue = Number(settings.questionCount);
   const selectedQuestionCountOption = questionCountPresets.includes(questionCountValue)
     ? String(questionCountValue)
@@ -482,6 +547,9 @@ function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongA
           <button className="secondary-button" disabled={loading} type="button" onClick={onOpenWrongAnswers}>
             오답노트 보기
           </button>
+          <button className="secondary-button" disabled={loading} type="button" onClick={onOpenMyPage}>
+            마이 페이지
+          </button>
         </div>
 
         <div className="admin-link-row">
@@ -491,6 +559,258 @@ function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongA
         </div>
       </form>
     </section>
+  );
+}
+
+function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, error, onBack, onRefresh }) {
+  const total = dashboard?.total || emptyLearningSummary();
+  const today = dashboard?.today || emptyLearningSummary();
+  const categoryStats = dashboard?.categories || [];
+  const modeStats = dashboard?.modes || [];
+  const recentHistories = dashboard?.recentHistories || [];
+  const mostWrongVocabularies = dashboard?.mostWrongVocabularies || [];
+
+  return (
+    <section className="panel my-page-panel" aria-labelledby="my-page-title">
+      <div className="screen-heading">
+        <div>
+          <p className="eyebrow">내 학습 현황</p>
+          <h1 id="my-page-title">마이 페이지</h1>
+          <p className="screen-description">
+            누적 학습 통계와 오답, 완벽히 아는 어휘를 한곳에서 확인합니다.
+          </p>
+        </div>
+        <button className="secondary-button" disabled={loading} type="button" onClick={onBack}>
+          처음 화면
+        </button>
+      </div>
+
+      {error && <ErrorMessage message={error} />}
+
+      <div className="toolbar">
+        <button className="secondary-button" disabled={loading} type="button" onClick={onRefresh}>
+          새로고침
+        </button>
+      </div>
+
+      {loading && <p className="status-message">학습 현황을 불러오는 중</p>}
+
+      {!loading && !dashboard && !error && (
+        <div className="empty-state">
+          <strong>학습 통계를 불러오지 못했습니다.</strong>
+          <span>잠시 후 다시 시도해 주세요.</span>
+        </div>
+      )}
+
+      <div className="summary-hero-grid">
+        <section className="accuracy-card">
+          <span>전체 정답률</span>
+          <strong>{total.accuracy}%</strong>
+        </section>
+        <dl className="stat-card-grid">
+          <div>
+            <dt>누적 풀이</dt>
+            <dd>{total.totalQuestionCount}</dd>
+          </div>
+          <div>
+            <dt>정답</dt>
+            <dd>{total.correctCount}</dd>
+          </div>
+          <div>
+            <dt>오답</dt>
+            <dd>{total.incorrectCount}</dd>
+          </div>
+          <div>
+            <dt>퀴즈 완료</dt>
+            <dd>{total.completedQuizCount}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <section className="dashboard-section" aria-labelledby="today-title">
+        <div className="section-title-row">
+          <h2 id="today-title">오늘</h2>
+          {today.totalQuestionCount === 0 && <span>아직 학습 기록 없음</span>}
+        </div>
+        <dl className="inline-stat-list">
+          <div>
+            <dt>풀이</dt>
+            <dd>{today.totalQuestionCount}</dd>
+          </div>
+          <div>
+            <dt>정답</dt>
+            <dd>{today.correctCount}</dd>
+          </div>
+          <div>
+            <dt>오답</dt>
+            <dd>{today.incorrectCount}</dd>
+          </div>
+          <div>
+            <dt>정답률</dt>
+            <dd>{today.accuracy}%</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="dashboard-section" aria-labelledby="category-stat-title">
+        <div className="section-title-row">
+          <h2 id="category-stat-title">카테고리별</h2>
+        </div>
+        <div className="stat-row-list">
+          {categoryStats.map((stat) => (
+            <StatRow
+              key={stat.category}
+              label={categoryLabel(stat.category)}
+              total={stat.totalQuestionCount}
+              correct={stat.correctCount}
+              incorrect={stat.incorrectCount}
+              accuracy={stat.accuracy}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="dashboard-section" aria-labelledby="mode-stat-title">
+        <div className="section-title-row">
+          <h2 id="mode-stat-title">퀴즈 모드별</h2>
+        </div>
+        <div className="stat-row-list">
+          {modeStats.map((stat) => (
+            <StatRow
+              key={stat.mode}
+              label={modeLabel(stat.mode)}
+              total={stat.totalQuestionCount}
+              correct={stat.correctCount}
+              incorrect={stat.incorrectCount}
+              accuracy={stat.accuracy}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="dashboard-section" aria-labelledby="most-wrong-title">
+        <div className="section-title-row">
+          <h2 id="most-wrong-title">많이 틀린 어휘</h2>
+        </div>
+        {mostWrongVocabularies.length === 0 ? (
+          <div className="empty-state compact-empty-state">
+            <strong>많이 틀린 어휘가 없습니다.</strong>
+            <span>일반 퀴즈에서 틀린 어휘가 생기면 상위 5개가 표시됩니다.</span>
+          </div>
+        ) : (
+          <div className="ranked-list">
+            {mostWrongVocabularies.map((item, index) => (
+              <article className="ranked-item" key={`${item.vocabularyId}-${index}`}>
+                <strong>{index + 1}</strong>
+                <div>
+                  <span>{item.word}</span>
+                  <small>{categoryLabel(item.category)}</small>
+                </div>
+                <em>{item.wrongCount}회</em>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="dashboard-section" aria-labelledby="recent-history-title">
+        <div className="section-title-row">
+          <h2 id="recent-history-title">최근 학습</h2>
+        </div>
+        {recentHistories.length === 0 ? (
+          <div className="empty-state compact-empty-state">
+            <strong>완료한 일반 퀴즈가 없습니다.</strong>
+            <span>일반 퀴즈를 끝까지 풀면 최근 10개 기록이 저장됩니다.</span>
+          </div>
+        ) : (
+          <div className="history-list">
+            {recentHistories.map((history) => (
+              <article className="history-item" key={history.id}>
+                <time>{formatDateTime(history.completedAt)}</time>
+                <span>{categoryLabel(history.category)}</span>
+                <span>{modeLabel(history.quizMode)}</span>
+                <strong>{history.totalCount}문제 · {history.correctCount}개 정답 · {history.accuracy}%</strong>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="dashboard-section" aria-labelledby="my-wrong-title">
+        <div className="section-title-row">
+          <h2 id="my-wrong-title">틀린 문제</h2>
+          <span>{wrongAnswers.length}개</span>
+        </div>
+        {wrongAnswers.length === 0 ? (
+          <div className="empty-state compact-empty-state">
+            <strong>저장된 오답이 없습니다.</strong>
+            <span>오답 어휘는 단어와 뜻, 틀린 횟수 기준으로 표시됩니다.</span>
+          </div>
+        ) : (
+          <div className="learning-word-list" role="list">
+            {wrongAnswers.map((item) => (
+              <LearningWordItem
+                key={item.id}
+                category={item.category}
+                title={item.word}
+                description={item.meaning}
+                meta={`${modeLabel(item.quizMode)} · ${item.wrongCount}회 틀림`}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="dashboard-section" aria-labelledby="mastered-title">
+        <div className="section-title-row">
+          <h2 id="mastered-title">완벽히 아는 문제</h2>
+          <span>{masteredVocabularies.length}개</span>
+        </div>
+        {masteredVocabularies.length === 0 ? (
+          <div className="empty-state compact-empty-state">
+            <strong>완벽히 아는 어휘가 없습니다.</strong>
+            <span>퀴즈에서 “완벽하게 알아요”를 누르면 이곳에 표시됩니다.</span>
+          </div>
+        ) : (
+          <div className="learning-word-list" role="list">
+            {masteredVocabularies.map((item) => (
+              <LearningWordItem
+                key={item.id}
+                category={item.category}
+                title={item.word}
+                description={item.meaning}
+                meta={`숙지 등록 ${formatDateTime(item.masteredAt)}`}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function StatRow({ label, total, correct, incorrect, accuracy }) {
+  return (
+    <article className="stat-row">
+      <strong>{label}</strong>
+      <span>{total}문제</span>
+      <span>정답 {correct}</span>
+      <span>오답 {incorrect}</span>
+      <em>{accuracy}%</em>
+    </article>
+  );
+}
+
+function LearningWordItem({ category, title, description, meta }) {
+  return (
+    <article className="learning-word-item" role="listitem">
+      <div>
+        <span className="category-badge">{categoryLabel(category)}</span>
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+      <small>{meta}</small>
+    </article>
   );
 }
 
@@ -997,7 +1317,7 @@ function QuizScreen({
 
       <button
         className="primary-button next-button"
-        disabled={!feedback}
+        disabled={!feedback || submitting}
         type="button"
         onClick={onNext}
       >
@@ -1007,7 +1327,7 @@ function QuizScreen({
   );
 }
 
-function ResultScreen({ totalCount, correctCount, incorrectCount, accuracy, quizType, onRetry, onWrongAnswers }) {
+function ResultScreen({ totalCount, correctCount, incorrectCount, accuracy, quizType, onRetry, onWrongAnswers, onMyPage }) {
   return (
     <section className="panel result-panel" aria-labelledby="result-title">
       <p className="eyebrow">{quizType === 'review' ? 'Review Result' : 'Quiz Result'}</p>
@@ -1045,6 +1365,9 @@ function ResultScreen({ totalCount, correctCount, incorrectCount, accuracy, quiz
         </button>
         <button className="secondary-button" type="button" onClick={onWrongAnswers}>
           오답노트 보기
+        </button>
+        <button className="secondary-button" type="button" onClick={onMyPage}>
+          마이 페이지
         </button>
       </div>
     </section>
@@ -1151,6 +1474,16 @@ function formatDateTime(value) {
     dateStyle: 'short',
     timeStyle: 'short',
   }).format(new Date(value));
+}
+
+function emptyLearningSummary() {
+  return {
+    totalQuestionCount: 0,
+    correctCount: 0,
+    incorrectCount: 0,
+    accuracy: 0,
+    completedQuizCount: 0,
+  };
 }
 
 function optionClassName(option, selectedOptionId, feedback) {

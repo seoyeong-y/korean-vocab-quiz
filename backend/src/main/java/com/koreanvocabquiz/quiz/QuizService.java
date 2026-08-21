@@ -95,6 +95,13 @@ public class QuizService {
         } else if (!correct) {
             wrongAnswerService.recordWrongAnswer(correctVocabulary, session.mode());
         }
+        sessionStore.recordSubmissionResult(new QuizQuestionSubmissionResult(
+                session.questionId(),
+                correctVocabulary.getId(),
+                correctVocabulary.getCategory(),
+                session.mode(),
+                correct
+        ));
 
         return new QuizSubmitResponse(correct, session.correctAnswer(), correctVocabulary.getId());
     }
@@ -111,6 +118,13 @@ public class QuizService {
             masteredVocabularyRepository.save(new MasteredVocabulary(vocabulary));
         }
         wrongAnswerService.deleteByVocabulary(vocabulary);
+        sessionStore.recordSubmissionResult(new QuizQuestionSubmissionResult(
+                session.questionId(),
+                vocabulary.getId(),
+                vocabulary.getCategory(),
+                session.mode(),
+                true
+        ));
 
         return new QuizMasteredResponse(true, session.correctAnswer(), vocabulary.getId());
     }

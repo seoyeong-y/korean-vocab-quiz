@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.matchesPattern;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -211,6 +212,14 @@ class QuizControllerTest {
                 .andExpect(jsonPath("$.vocabularyId").value(question.vocabularyId()));
 
         assertEquals(1, masteredVocabularyRepository.count());
+
+        mockMvc.perform(get("/api/mastered-vocabularies"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].vocabularyId").value(question.vocabularyId()))
+                .andExpect(jsonPath("$[0].word").exists())
+                .andExpect(jsonPath("$[0].meaning").exists())
+                .andExpect(jsonPath("$[0].masteredAt").exists());
     }
 
     @Test

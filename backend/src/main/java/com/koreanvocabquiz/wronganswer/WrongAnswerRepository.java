@@ -14,6 +14,9 @@ public interface WrongAnswerRepository extends JpaRepository<WrongAnswer, Long> 
     @EntityGraph(attributePaths = "vocabulary")
     List<WrongAnswer> findAllByOrderByLastWrongAtDesc();
 
+    @EntityGraph(attributePaths = "vocabulary")
+    List<WrongAnswer> findTop5ByOrderByWrongCountDescLastWrongAtDesc();
+
     Optional<WrongAnswer> findByVocabularyAndQuizMode(Vocabulary vocabulary, QuizMode quizMode);
 
     void deleteByVocabulary(Vocabulary vocabulary);
