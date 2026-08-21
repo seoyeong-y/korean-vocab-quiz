@@ -62,7 +62,7 @@ Optional AI extraction variables:
 
 ```text
 GEMINI_API_KEY
-GEMINI_VISION_MODEL
+GEMINI_MODEL
 ```
 
 `GEMINI_API_KEY`는 이미지 기반 어휘 추출 기능에서만 백엔드가 사용합니다.

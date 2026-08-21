@@ -34,4 +34,4 @@ app:
 
 gemini:
   api-key: ${GEMINI_API_KEY:}
-  vision-model: ${GEMINI_VISION_MODEL:gemini-2.5-flash}
+  vision-model: ${GEMINI_MODEL:gemini-2.5-flash}
