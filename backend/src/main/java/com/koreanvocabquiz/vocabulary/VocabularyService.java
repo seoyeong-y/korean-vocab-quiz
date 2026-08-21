@@ -420,7 +420,11 @@ public class VocabularyService {
         }
 
         private String meaning() {
-            return meaning.toString();
+            return normalizeNumberSymbolSpacing(meaning.toString());
+        }
+
+        private String normalizeNumberSymbolSpacing(String value) {
+            return value.replaceAll("(?<!\\s)([②-⑳])", " $1");
         }
 
         private Double lowerConfidence(Double current, Double next) {
