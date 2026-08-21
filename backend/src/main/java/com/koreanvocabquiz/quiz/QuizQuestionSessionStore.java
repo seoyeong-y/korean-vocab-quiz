@@ -15,6 +15,7 @@ public class QuizQuestionSessionStore {
     private static final Duration SESSION_TTL = Duration.ofMinutes(30);
 
     private final ConcurrentMap<String, QuizQuestionSession> sessions = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, QuizQuestionSubmissionResult> submissionResults = new ConcurrentHashMap<>();
 
     public String nextId() {
         return UUID.randomUUID().toString();
@@ -38,12 +39,28 @@ public class QuizQuestionSessionStore {
         return Optional.of(session);
     }
 
+    public void recordSubmissionResult(QuizQuestionSubmissionResult result) {
+        cleanupExpired();
+        submissionResults.put(result.questionId(), result);
+    }
+
+    public Optional<QuizQuestionSubmissionResult> findSubmissionResult(String questionId) {
+        cleanupExpired();
+        return Optional.ofNullable(submissionResults.get(questionId));
+    }
+
     public LocalDateTime expiresAt() {
         return LocalDateTime.now().plus(SESSION_TTL);
     }
 
     private void cleanupExpired() {
         LocalDateTime now = LocalDateTime.now();
-        sessions.entrySet().removeIf(entry -> entry.getValue().isExpired(now));
+        sessions.entrySet().removeIf(entry -> {
+            boolean expired = entry.getValue().isExpired(now);
+            if (expired) {
+                submissionResults.remove(entry.getKey());
+            }
+            return expired;
+        });
     }
 }

@@ -43,8 +43,23 @@ export function markQuizQuestionMastered(payload) {
   });
 }
 
+export function completeQuiz(payload) {
+  return request('/api/statistics/quiz-completions', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getStatisticsDashboard() {
+  return request('/api/statistics/dashboard');
+}
+
 export function getWrongAnswers() {
   return request('/api/wrong-answers');
+}
+
+export function getMasteredVocabularies() {
+  return request('/api/mastered-vocabularies');
 }
 
 export function createWrongAnswerReviewQuiz(payload) {

@@ -131,6 +131,9 @@ npm run build
 | `POST` | `/api/quizzes` | 퀴즈 생성 |
 | `POST` | `/api/quizzes/submit` | 정답 제출 |
 | `POST` | `/api/quizzes/mastered` | 숙지 어휘 등록 |
+| `GET` | `/api/mastered-vocabularies` | 숙지 어휘 목록 조회 |
+| `POST` | `/api/statistics/quiz-completions` | 일반 퀴즈 완료 기록 저장 |
+| `GET` | `/api/statistics/dashboard` | 학습 통계 대시보드 조회 |
 | `GET` | `/api/wrong-answers` | 오답 목록 조회 |
 | `POST` | `/api/wrong-answers/quizzes` | 오답 복습 퀴즈 생성 |
 | `DELETE` | `/api/wrong-answers/{id}` | 오답 개별 삭제 |
@@ -451,6 +454,27 @@ Mastered response example:
 숙지 처리된 어휘는 `mastered_vocabularies`에 저장되며, 같은 어휘가 오답노트에 남아 있으면 함께 제거됩니다.
 현재 MVP에서는 로그인 없이 전체 사용자 공통 숙지 목록으로 동작합니다.
 
+List mastered vocabularies:
+
+```bash
+curl http://localhost:8080/api/mastered-vocabularies
+```
+
+Response example:
+
+```json
+[
+  {
+    "id": 1,
+    "vocabularyId": 1,
+    "word": "사과",
+    "meaning": "apple",
+    "category": "NATIVE_KOREAN",
+    "masteredAt": "2026-08-21T19:30:00"
+  }
+]
+```
+
 Quiz error cases:
 
 - 선택한 category의 어휘가 4개 미만이면 4지선다 퀴즈를 생성할 수 없습니다.
@@ -461,6 +485,64 @@ Quiz error cases:
 - 해당 문제의 options에 없는 `selectedOptionId`로 제출하면 400 응답으로 처리됩니다.
 - 정답 제출 시 클라이언트의 정답 여부는 신뢰하지 않고 서버가 저장한 문제 세션을 기준으로 판정합니다.
 - 생성되지 않았거나 만료된 `questionId`로 숙지 등록을 요청하면 400 응답으로 처리됩니다.
+
+## Learning Statistics
+
+일반 퀴즈를 끝까지 완료하면 프론트엔드가 문제들의 `questionId` 목록을 `/api/statistics/quiz-completions`로 전달합니다.
+서버는 각 문제의 제출 결과를 서버 메모리에 기록해 두었다가, 완료 요청 시 해당 결과를 기준으로 `quiz_histories`에 저장합니다.
+따라서 통계의 정답/오답 수는 프론트에서 계산한 값을 그대로 신뢰하지 않습니다.
+
+오답 복습 퀴즈는 일반 학습 정답률을 왜곡하지 않도록 현재 통계 저장 대상에서 제외합니다.
+`MIXED` 모드로 완료한 퀴즈는 `quiz_mode`에 `MIXED`로 저장됩니다.
+
+Complete a general quiz:
+
+```bash
+curl -X POST http://localhost:8080/api/statistics/quiz-completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "category": "NATIVE_KOREAN",
+    "mode": "WORD_TO_MEANING",
+    "questionIds": [
+      "b2e4c407-67e0-4203-bb01-1306a5a790d1",
+      "63cf230f-2099-4be0-b27a-6b27d808ac1e"
+    ],
+    "wrongAnswerReview": false
+  }'
+```
+
+Completion response example:
+
+```json
+{
+  "id": 1,
+  "completedAt": "2026-08-21T19:30:00",
+  "category": "NATIVE_KOREAN",
+  "quizMode": "WORD_TO_MEANING",
+  "totalCount": 10,
+  "correctCount": 8,
+  "incorrectCount": 2,
+  "accuracy": 80
+}
+```
+
+Dashboard:
+
+```bash
+curl http://localhost:8080/api/statistics/dashboard
+```
+
+Dashboard response includes:
+
+- `total`: 누적 풀이 문제 수, 정답 수, 오답 수, 전체 정답률, 완료한 퀴즈 횟수
+- `today`: 오늘 풀이 문제 수, 정답 수, 오답 수, 오늘 정답률
+- `categories`: 고유어, 한자어, 외래어, 속담, 관용어, 사자성어별 통계
+- `modes`: `WORD_TO_MEANING`, `MEANING_TO_WORD`, `MIXED` 모드별 통계
+- `recentHistories`: 최근 완료한 일반 퀴즈 기록 10개
+- `mostWrongVocabularies`: 기존 `wrong_answers` 기준 많이 틀린 어휘 상위 5개
+
+마이 페이지에서는 학습 통계, 많이 틀린 어휘, 최근 학습 기록, 틀린 문제, 완벽히 아는 문제를 함께 확인할 수 있습니다.
+현재 MVP에서는 로그인 기능이 없으므로 모든 통계와 숙지/오답 목록은 단일 사용자 데이터처럼 동작합니다.
 
 ## Wrong Answer Review
 
