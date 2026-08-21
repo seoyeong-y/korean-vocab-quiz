@@ -23,6 +23,7 @@ const categories = [
   { value: 'LOANWORD', label: '외래어', description: '외국어 유래 어휘' },
   { value: 'PROVERB', label: '속담', description: '관용적 교훈 표현' },
   { value: 'IDIOM', label: '관용어', description: '굳어진 표현' },
+  { value: 'FOUR_CHARACTER_IDIOM', label: '사자성어', description: '네 글자 한자 성어' },
 ];
 
 const quizModes = [

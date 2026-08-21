@@ -6,6 +6,7 @@ public enum VocabularyCategory {
     LOANWORD,
     PROVERB,
     IDIOM,
+    FOUR_CHARACTER_IDIOM,
     GENERAL,
     NOUN,
     VERB,
