@@ -49,6 +49,11 @@ public class QuizQuestionSessionStore {
         return Optional.ofNullable(submissionResults.get(questionId));
     }
 
+    public void removeSubmissionResult(String questionId) {
+        cleanupExpired();
+        submissionResults.remove(questionId);
+    }
+
     public LocalDateTime expiresAt() {
         return LocalDateTime.now().plus(SESSION_TTL);
     }

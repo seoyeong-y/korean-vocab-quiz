@@ -13,6 +13,8 @@ public interface MasteredVocabularyRepository extends JpaRepository<MasteredVoca
 
     boolean existsByVocabulary(Vocabulary vocabulary);
 
+    void deleteByVocabulary(Vocabulary vocabulary);
+
     @EntityGraph(attributePaths = "vocabulary")
     List<MasteredVocabulary> findAllByOrderByMasteredAtDesc();
 

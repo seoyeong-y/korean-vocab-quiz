@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -284,6 +285,58 @@ class QuizControllerTest {
                 .andExpect(status().isOk());
 
         assertEquals(0, wrongAnswerRepository.count());
+    }
+
+    @Test
+    void cancelMasteredQuestion() throws Exception {
+        QuizQuestionResponse question = createOneQuestion("WORD_TO_MEANING");
+        mockMvc.perform(post("/api/quizzes/mastered")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s"
+                                }
+                                """.formatted(question.questionId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mastered").value(true));
+
+        mockMvc.perform(delete("/api/quizzes/mastered/{questionId}", question.questionId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mastered").value(false))
+                .andExpect(jsonPath("$.vocabularyId").value(question.vocabularyId()));
+
+        assertEquals(0, masteredVocabularyRepository.count());
+        assertEquals(0, sessionStore.findSubmissionResult(question.questionId()).stream().count());
+    }
+
+    @Test
+    void markingMasteredAfterAnswerDoesNotOverwriteSubmissionResult() throws Exception {
+        TestSession session = saveSession(apple, banana, QuizMode.WORD_TO_MEANING);
+
+        mockMvc.perform(post("/api/quizzes/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s",
+                                  "selectedOptionId": "%s"
+                                }
+                                """.formatted(session.questionId(), session.selectedOptionId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.correct").value(false));
+
+        mockMvc.perform(post("/api/quizzes/mastered")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s"
+                                }
+                                """.formatted(session.questionId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mastered").value(true));
+
+        QuizQuestionSubmissionResult result = sessionStore.findSubmissionResult(session.questionId()).orElseThrow();
+        assertEquals(false, result.correct());
+        assertEquals(false, result.mastered());
     }
 
     @Test

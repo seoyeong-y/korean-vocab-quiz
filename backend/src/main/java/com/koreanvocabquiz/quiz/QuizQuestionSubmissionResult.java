@@ -7,6 +7,7 @@ public record QuizQuestionSubmissionResult(
         Long vocabularyId,
         VocabularyCategory category,
         QuizMode mode,
-        boolean correct
+        boolean correct,
+        boolean mastered
 ) {
 }
