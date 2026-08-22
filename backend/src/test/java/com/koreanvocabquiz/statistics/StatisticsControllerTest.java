@@ -12,7 +12,10 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.koreanvocabquiz.learning.VocabularyLearningProgressRepository;
+import com.koreanvocabquiz.learning.VocabularyLearningProgress;
 import com.koreanvocabquiz.quiz.QuizMode;
+import com.koreanvocabquiz.quiz.MasteredVocabulary;
+import com.koreanvocabquiz.quiz.MasteredVocabularyRepository;
 import com.koreanvocabquiz.quiz.QuizQuestionSession;
 import com.koreanvocabquiz.quiz.QuizQuestionSessionStore;
 import com.koreanvocabquiz.vocabulary.Vocabulary;
@@ -57,6 +60,9 @@ class StatisticsControllerTest {
     @Autowired
     private VocabularyLearningProgressRepository learningProgressRepository;
 
+    @Autowired
+    private MasteredVocabularyRepository masteredVocabularyRepository;
+
     private Vocabulary apple;
     private Vocabulary banana;
     private Vocabulary grape;
@@ -65,6 +71,7 @@ class StatisticsControllerTest {
     void setUp() {
         quizHistoryRepository.deleteAll();
         wrongAnswerRepository.deleteAll();
+        masteredVocabularyRepository.deleteAll();
         learningProgressRepository.deleteAll();
         vocabularyRepository.deleteAll();
 
@@ -164,6 +171,20 @@ class StatisticsControllerTest {
                 .andExpect(jsonPath("$.attemptedVocabularyCount").value(0))
                 .andExpect(jsonPath("$.vocabularyCounts[0].totalCount").value(3))
                 .andExpect(jsonPath("$.vocabularyCounts[0].attemptedCount").value(0));
+    }
+
+    @Test
+    void dashboardIncludesMasteredVocabularyWithoutDoubleCountingProgress() throws Exception {
+        VocabularyLearningProgress appleProgress = new VocabularyLearningProgress(apple);
+        appleProgress.recordAttempt(true);
+        learningProgressRepository.save(appleProgress);
+        masteredVocabularyRepository.save(new MasteredVocabulary(apple));
+        masteredVocabularyRepository.save(new MasteredVocabulary(grape));
+
+        mockMvc.perform(get("/api/statistics/dashboard"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attemptedVocabularyCount").value(2))
+                .andExpect(jsonPath("$.vocabularyCounts[0].attemptedCount").value(2));
     }
 
     @Test
