@@ -1746,12 +1746,11 @@ function QuizScreen({
           <strong>{feedback.masteredOnly ? '숙지 어휘로 기록했습니다.' : feedback.correct ? '정답입니다.' : '오답입니다.'}</strong>
           {feedback.masteredOnly && <span>앞으로 일반 퀴즈와 오답 복습에서 제외됩니다.</span>}
           {!feedback.correct && <span>정답: {feedback.correctAnswer}</span>}
-          {!feedback.correct && feedback.selectedAnswer && <span>선택한 오답: {feedback.selectedAnswer}</span>}
           {!feedback.correct && feedback.selectedWord && feedback.selectedMeaning && (
             <span>
               {feedback.mode === 'WORD_TO_MEANING'
-                ? `선택한 뜻에 해당하는 단어는 ${feedback.selectedWord}입니다.`
-                : `선택한 단어에 해당하는 뜻은 ${feedback.selectedMeaning}입니다.`}
+                ? `선택한 오답에 해당하는 단어는 ${feedback.selectedWord}입니다.`
+                : `선택한 오답에 해당하는 뜻은 ${feedback.selectedMeaning}입니다.`}
             </span>
           )}
         </div>
