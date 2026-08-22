@@ -128,3 +128,76 @@ export function saveVocabularyBatch(items) {
     body: JSON.stringify({ items }),
   });
 }
+
+export function getLiteraryAuthors() {
+  return request('/api/literature/authors');
+}
+
+export function createLiteraryAuthor(payload) {
+  return request('/api/literature/authors', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function updateLiteraryAuthor(id, payload) {
+  return request(`/api/literature/authors/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export function deleteLiteraryAuthor(id) {
+  return request(`/api/literature/authors/${id}`, { method: 'DELETE' });
+}
+
+export function getLiteraryWorks() {
+  return request('/api/literature/works');
+}
+
+export function createLiteraryWork(payload) {
+  return request('/api/literature/works', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function updateLiteraryWork(id, payload) {
+  return request(`/api/literature/works/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export function deleteLiteraryWork(id) {
+  return request(`/api/literature/works/${id}`, { method: 'DELETE' });
+}
+
+export function getLiteraryFeatures() {
+  return request('/api/literature/features');
+}
+
+export function createLiteraryFeature(payload) {
+  return request('/api/literature/features', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function updateLiteraryFeature(id, payload) {
+  return request(`/api/literature/features/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export function deleteLiteraryFeature(id) {
+  return request(`/api/literature/features/${id}`, { method: 'DELETE' });
+}
+
+export function previewLiteraryCsv(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return request('/api/literature/csv/preview', { method: 'POST', headers: {}, body: formData });
+}
+
+export function importLiteraryCsv(rows) {
+  return request('/api/literature/csv/import', { method: 'POST', body: JSON.stringify({ rows }) });
+}
+
+export function getLiteraryQuizAvailability() {
+  return request('/api/literature/quizzes/availability');
+}
+
+export function createLiteraryQuiz(payload) {
+  return request('/api/literature/quizzes', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function submitLiteraryQuizAnswer(questionId, selectedOptionId) {
+  return request(`/api/literature/quizzes/${questionId}/submit`, {
+    method: 'POST',
+    body: JSON.stringify({ selectedOptionId }),
+  });
+}

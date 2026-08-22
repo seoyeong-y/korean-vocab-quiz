@@ -38,6 +38,11 @@ public class AdminAuthenticationInterceptor implements HandlerInterceptor {
         String path = request.getRequestURI().substring(request.getContextPath().length());
         String method = request.getMethod();
 
+        if (path.startsWith("/api/literature/") && !path.startsWith("/api/literature/quizzes")
+                && ("POST".equals(method) || "PUT".equals(method) || "DELETE".equals(method))) {
+            return true;
+        }
+
         if ("POST".equals(method) && "/api/vocabularies".equals(path)) {
             return true;
         }

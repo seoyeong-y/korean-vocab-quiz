@@ -735,6 +735,61 @@ Wrong answer review error cases:
 - 오답 Vocabulary와 같은 category 전체에서도 4개의 고유한 선택지 text를 만들 수 없으면 생성할 수 없습니다.
 - `questionCount`가 출제 가능한 오답 어휘 수보다 크면 생성할 수 없습니다.
 
+## 문학 작가·작품 퀴즈
+
+문학 기능은 기존 Vocabulary와 분리된 도메인입니다. DB에 등록된 작가, 작품, 특징만 사용하며 Gemini나 다른 AI로 문제를 생성하거나 문학 지식을 보완하지 않습니다. 시대, 문학 유파, 그룹 필드는 사용하지 않습니다.
+
+특징은 두 종류로 구분합니다.
+
+- `WORK`: 특정 작품에 직접 연결되는 줄거리, 주제, 표현 등의 특징입니다.
+- `AUTHOR`: 작가의 작품 세계나 여러 작품에 공통되는 특징입니다. 특정 작품에 복제하지 않고 작가에만 연결합니다.
+
+문학 퀴즈 API:
+
+```bash
+curl http://localhost:8080/api/literature/quizzes/availability
+curl -X POST http://localhost:8080/api/literature/quizzes \
+  -H "Content-Type: application/json" \
+  -d '{"quizType":"WORK_GUESS","questionCount":5}'
+curl -X POST http://localhost:8080/api/literature/quizzes/{questionId}/submit \
+  -H "Content-Type: application/json" \
+  -d '{"selectedOptionId":"option-id"}'
+```
+
+`WORK_GUESS`는 작품을 맞히고, `AUTHOR_GUESS`는 작가를 맞히는 4지선다입니다. AUTHOR 특징은 작품 하나의 고유 특징처럼 사용하지 않고 작가의 작품 목록과 함께 작가를 맞히는 문제로만 사용합니다. 서버는 문제 생성 시 발급한 `questionId`와 해당 문제의 `optionId`를 메모리에 보관해 제출을 검증합니다. 생성 응답에는 정답을 노출하지 않습니다.
+
+### 문학 데이터 관리
+
+문학 조회 API는 공개되며, 작가·작품·특징 변경과 CSV Preview/Import는 기존 `ADMIN_PASSWORD` 관리자 인증이 필요합니다.
+
+```text
+GET    /api/literature/authors
+POST   /api/literature/authors
+PUT    /api/literature/authors/{id}
+DELETE /api/literature/authors/{id}
+GET    /api/literature/works
+POST   /api/literature/works
+PUT    /api/literature/works/{id}
+DELETE /api/literature/works/{id}
+GET    /api/literature/features
+POST   /api/literature/features
+PUT    /api/literature/features/{id}
+DELETE /api/literature/features/{id}
+POST   /api/literature/csv/preview
+POST   /api/literature/csv/import
+```
+
+CSV 헤더는 `author,work,feature,feature_type` 순서여야 합니다.
+
+```csv
+author,work,feature,feature_type
+현진건,운수 좋은 날,"작품에 직접 연결된 특징",WORK
+김유정,동백꽃,,
+김유정,,"농촌의 현실을 토속적이고 해학적으로 표현",AUTHOR
+```
+
+작가가 빈 칸인 행은 직전의 작가명을 상속하지만, `feature`는 상속하지 않습니다. `feature_type`이 비어 있는 특징은 Preview에서 `확인 필요`로 표시되며 관리자가 `WORK` 또는 `AUTHOR`를 선택한 뒤 Import해야 합니다. Preview 단계에서는 DB에 저장하지 않고, Import에서 선택된 행만 검증 후 저장합니다. 기존 작가·작품·특징과 동일한 데이터는 중복으로 건너뛰며 결과에 성공, 중복 skip, 실패 건수와 행별 사유를 반환합니다. CSV는 UTF-8/BOM을 지원하고 최대 5MB입니다.
+
 ## Current Scope
 
 Implemented in this setup:
@@ -750,9 +805,11 @@ Implemented in this setup:
 - Quiz answer submission API
 - Frontend quiz UI
 - Wrong-answer storage and review
+- Literary author, work, feature management and CSV preview/import
+- Literary work-guess and author-guess quizzes
+- Administrator authentication for data-changing APIs
 
 Not implemented yet:
 
 - User accounts
-- Authentication or authorization
 - AWS resource creation or deployment
