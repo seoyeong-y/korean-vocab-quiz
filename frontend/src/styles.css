@@ -519,6 +519,10 @@ legend small,
   margin-top: 4px;
 }
 
+.wrong-only-button {
+  min-height: 58px;
+}
+
 .availability-error {
   color: var(--color-danger);
 }

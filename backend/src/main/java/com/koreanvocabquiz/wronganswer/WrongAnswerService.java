@@ -45,6 +45,8 @@ public class WrongAnswerService {
         List<Vocabulary> questionVocabularies = wrongAnswerRepository.findAllByOrderByLastWrongAtDesc()
                 .stream()
                 .filter(wrongAnswer -> wrongAnswer.getQuizMode() == request.mode())
+                .filter(wrongAnswer -> request.category() == null
+                        || wrongAnswer.getVocabulary().getCategory() == request.category())
                 .map(WrongAnswer::getVocabulary)
                 .toList();
 
