@@ -1705,7 +1705,10 @@ function normalizeError(message) {
     return '현재 문제의 선택지가 아닙니다. 퀴즈를 다시 시작해 주세요.';
   }
   if (message.includes('questionCount')) {
-    return '문제 수가 출제 가능한 어휘 수보다 많습니다.';
+    const maximumMatch = message.match(/Maximum question count:\s*(\d+)/i);
+    return maximumMatch
+      ? `문제 수가 출제 가능한 어휘 수보다 많습니다. 최대 출제 가능 문제 수: ${maximumMatch[1]}개입니다.`
+      : '문제 수가 출제 가능한 어휘 수보다 많습니다.';
   }
   if (message.includes('Only jpg')) {
     return '지원하지 않는 파일 형식입니다. jpg, jpeg, png, webp 이미지만 업로드해 주세요.';

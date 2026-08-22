@@ -623,7 +623,7 @@ class QuizControllerTest {
                 }
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.messages[0]").value("questionCount cannot be greater than the number of eligible vocabularies available for this quiz."));
+                .andExpect(jsonPath("$.messages[0]").value("questionCount cannot be greater than the number of eligible vocabularies available for this quiz. Maximum question count: 4."));
     }
 
     @Test
