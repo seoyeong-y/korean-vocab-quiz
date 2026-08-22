@@ -49,21 +49,33 @@ const initialSettings = {
   questionCount: 5,
 };
 
+const APP_STATE_STORAGE_KEY = 'korean-vocab-quiz-app-state';
+
+function readAppState() {
+  try {
+    const savedState = window.sessionStorage.getItem(APP_STATE_STORAGE_KEY);
+    return savedState ? JSON.parse(savedState) : {};
+  } catch {
+    return {};
+  }
+}
+
 function App() {
-  const [screen, setScreen] = React.useState('start');
-  const [settings, setSettings] = React.useState(initialSettings);
-  const [reviewSettings, setReviewSettings] = React.useState({
+  const [restoredState] = React.useState(readAppState);
+  const [screen, setScreen] = React.useState(restoredState.screen || 'start');
+  const [settings, setSettings] = React.useState(restoredState.settings || initialSettings);
+  const [reviewSettings, setReviewSettings] = React.useState(restoredState.reviewSettings || {
     mode: 'WORD_TO_MEANING',
     questionCount: 1,
   });
-  const [quizType, setQuizType] = React.useState('general');
-  const [questions, setQuestions] = React.useState([]);
-  const [currentIndex, setCurrentIndex] = React.useState(0);
-  const [questionStates, setQuestionStates] = React.useState({});
-  const [wrongAnswers, setWrongAnswers] = React.useState([]);
-  const [masteredVocabularies, setMasteredVocabularies] = React.useState([]);
-  const [statisticsDashboard, setStatisticsDashboard] = React.useState(null);
-  const [quizHistorySaved, setQuizHistorySaved] = React.useState(false);
+  const [quizType, setQuizType] = React.useState(restoredState.quizType || 'general');
+  const [questions, setQuestions] = React.useState(restoredState.questions || []);
+  const [currentIndex, setCurrentIndex] = React.useState(restoredState.currentIndex || 0);
+  const [questionStates, setQuestionStates] = React.useState(restoredState.questionStates || {});
+  const [wrongAnswers, setWrongAnswers] = React.useState(restoredState.wrongAnswers || []);
+  const [masteredVocabularies, setMasteredVocabularies] = React.useState(restoredState.masteredVocabularies || []);
+  const [statisticsDashboard, setStatisticsDashboard] = React.useState(restoredState.statisticsDashboard || null);
+  const [quizHistorySaved, setQuizHistorySaved] = React.useState(Boolean(restoredState.quizHistorySaved));
   const [loading, setLoading] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -80,6 +92,23 @@ function App() {
   const correctCount = answers.filter((answer) => answer.correct).length;
   const incorrectCount = answers.length - correctCount;
   const accuracy = answers.length ? Math.round((correctCount / answers.length) * 100) : 0;
+
+  React.useEffect(() => {
+    window.history.replaceState(null, '', screen === 'start' ? '#home' : `#${screen}`);
+    window.sessionStorage.setItem(APP_STATE_STORAGE_KEY, JSON.stringify({
+      screen,
+      settings,
+      reviewSettings,
+      quizType,
+      questions,
+      currentIndex,
+      questionStates,
+      wrongAnswers,
+      masteredVocabularies,
+      statisticsDashboard,
+      quizHistorySaved,
+    }));
+  }, [screen, settings, reviewSettings, quizType, questions, currentIndex, questionStates, wrongAnswers, masteredVocabularies, statisticsDashboard, quizHistorySaved]);
 
   async function saveAnsweredGeneralQuiz() {
     if (quizType !== 'general' || quizHistorySaved) {
@@ -549,6 +578,7 @@ function App() {
           onPrevious={handlePrevious}
           onNext={handleNext}
           onFinishEarly={handleFinishEarly}
+          onBack={handleRetry}
           answeredCount={answers.length}
         />
       )}
@@ -777,7 +807,7 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
           </p>
         </div>
         <button className="secondary-button" disabled={loading} type="button" onClick={onBack}>
-          처음 화면
+          ← 홈으로
         </button>
       </div>
 
@@ -1192,7 +1222,7 @@ function AdminImageVocabularyScreen({ onBack }) {
           </p>
         </div>
         <button className="secondary-button" disabled={loading || saving} type="button" onClick={onBack}>
-          처음 화면
+          ← 홈으로
         </button>
       </div>
 
@@ -1385,7 +1415,7 @@ function WrongAnswerScreen({
           <p className="screen-description">일반 퀴즈에서 틀린 어휘를 모아 다시 확인합니다.</p>
         </div>
         <button className="secondary-button" disabled={loading} type="button" onClick={onBack}>
-          처음 화면
+          ← 홈으로
         </button>
       </div>
 
@@ -1519,6 +1549,7 @@ function QuizScreen({
   onPrevious,
   onNext,
   onFinishEarly,
+  onBack,
   answeredCount,
 }) {
   return (
@@ -1536,6 +1567,9 @@ function QuizScreen({
             onClick={onFinishEarly}
           >
             여기까지 저장하고 결과 보기
+          </button>
+          <button className="secondary-button" disabled={submitting} type="button" onClick={onBack}>
+            ← 홈으로
           </button>
         </div>
       </div>
@@ -1665,7 +1699,7 @@ function ResultScreen({ totalCount, correctCount, incorrectCount, accuracy, quiz
           다시 풀기
         </button>
         <button className="secondary-button" type="button" onClick={onRetry}>
-          처음 화면
+          ← 홈으로
         </button>
         <button className="secondary-button" type="button" onClick={onWrongAnswers}>
           오답노트 보기
