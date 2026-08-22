@@ -173,6 +173,17 @@ class LiteratureControllerTest {
     }
 
     @Test
+    void unresolvedFeatureCannotBeImportedUntilTypeIsConfirmed() throws Exception {
+        mockMvc.perform(post("/api/literature/image/import")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rows\":[{\"rowNumber\":1,\"selected\":true,\"author\":\"현진건\",\"work\":null,\"feature\":\"확인 필요한 설명\",\"featureType\":null}]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(1))
+                .andExpect(jsonPath("$.successCount").value(0))
+                .andExpect(jsonPath("$.failedCount").value(1));
+    }
+
+    @Test
     void literaryImageExtractionNormalizesAuthorAndWorkWithoutSaving() throws Exception {
         when(imageAnalysisClient.extract(any())).thenReturn(List.of(new LiteraryImageAnalysisResult(1, List.of(
                 new LiteraryImageAuthorDraft("현진건(소설)", List.of("<운수 좋은 날>", "〈빈처〉"), List.of(
