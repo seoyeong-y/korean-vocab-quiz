@@ -8,6 +8,7 @@ import {
   deleteWrongAnswer,
   extractVocabularyFromImages,
   getMasteredVocabularies,
+  getQuizAvailability,
   getStatisticsDashboard,
   getWrongAnswers,
   markQuizQuestionMastered,
@@ -76,6 +77,9 @@ function App() {
   const [masteredVocabularies, setMasteredVocabularies] = React.useState(restoredState.masteredVocabularies || []);
   const [statisticsDashboard, setStatisticsDashboard] = React.useState(restoredState.statisticsDashboard || null);
   const [quizHistorySaved, setQuizHistorySaved] = React.useState(Boolean(restoredState.quizHistorySaved));
+  const [quizAvailability, setQuizAvailability] = React.useState([]);
+  const [availabilityLoading, setAvailabilityLoading] = React.useState(false);
+  const [availabilityError, setAvailabilityError] = React.useState('');
   const [loading, setLoading] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -268,6 +272,26 @@ function App() {
       setLoading(false);
     }
   }
+
+  async function loadQuizAvailability() {
+    setAvailabilityLoading(true);
+    setAvailabilityError('');
+
+    try {
+      const availability = await getQuizAvailability();
+      setQuizAvailability(Array.isArray(availability) ? availability : []);
+    } catch (availabilityLoadError) {
+      setAvailabilityError('출제 가능 어휘 수를 불러오지 못했습니다.');
+    } finally {
+      setAvailabilityLoading(false);
+    }
+  }
+
+  React.useEffect(() => {
+    if (screen === 'start') {
+      loadQuizAvailability();
+    }
+  }, [screen]);
 
   React.useEffect(() => {
     if (restoredState.screen === 'myPage') {
@@ -525,6 +549,9 @@ function App() {
           settings={settings}
           loading={loading}
           error={error}
+          availability={quizAvailability}
+          availabilityLoading={availabilityLoading}
+          availabilityError={availabilityError}
           onChange={setSettings}
           onStart={handleStart}
           onOpenWrongAnswers={loadWrongAnswers}
@@ -605,11 +632,26 @@ function App() {
   );
 }
 
-function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongAnswers, onOpenMyPage, onOpenAdmin }) {
+function StartScreen({
+  settings,
+  loading,
+  error,
+  availability,
+  availabilityLoading,
+  availabilityError,
+  onChange,
+  onStart,
+  onOpenWrongAnswers,
+  onOpenMyPage,
+  onOpenAdmin,
+}) {
   const questionCountValue = Number(settings.questionCount);
   const selectedQuestionCountOption = questionCountPresets.includes(questionCountValue)
     ? String(questionCountValue)
     : 'custom';
+  const availabilityByCategory = Object.fromEntries(
+    availability.map((item) => [item.category, item.availableCount])
+  );
 
   function updateField(field, value) {
     onChange({
@@ -662,12 +704,22 @@ function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongA
                   onChange={(event) => updateCategory(event.target.value)}
                 />
                 <span>
-                  <strong>{category.label}</strong>
+                    <strong>
+                      {category.label}
+                      <em className="category-availability">
+                        {availabilityLoading
+                          ? '출제 가능 확인 중'
+                          : availabilityByCategory[category.value] !== undefined
+                            ? `출제 가능 ${availabilityByCategory[category.value]}개`
+                            : '출제 가능 수 확인 필요'}
+                      </em>
+                    </strong>
                   <small>{category.description}</small>
                 </span>
               </label>
             ))}
           </div>
+          {availabilityError && <p className="field-hint availability-error">{availabilityError}</p>}
         </fieldset>
 
         <fieldset>

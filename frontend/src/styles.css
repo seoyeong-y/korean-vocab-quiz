@@ -510,6 +510,19 @@ legend small,
   padding: 4px 9px;
 }
 
+.category-availability {
+  color: var(--color-primary);
+  display: block;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  margin-top: 4px;
+}
+
+.availability-error {
+  color: var(--color-danger);
+}
+
 .review-badge {
   background: var(--color-warning-soft);
   border: 1px solid #f3da91;

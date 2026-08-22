@@ -29,6 +29,10 @@ export function createQuiz(payload) {
   });
 }
 
+export function getQuizAvailability() {
+  return request('/api/quizzes/availability');
+}
+
 export function submitQuizAnswer(payload) {
   return request('/api/quizzes/submit', {
     method: 'POST',

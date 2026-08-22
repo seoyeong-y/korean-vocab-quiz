@@ -111,6 +111,17 @@ class QuizControllerTest {
     }
 
     @Test
+    void returnsAvailableVocabularyCountByCategory() throws Exception {
+        mockMvc.perform(get("/api/quizzes/availability"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(6)))
+                .andExpect(jsonPath("$[0].category").value("NATIVE_KOREAN"))
+                .andExpect(jsonPath("$[0].availableCount").value(0))
+                .andExpect(jsonPath("$[2].category").value("LOANWORD"))
+                .andExpect(jsonPath("$[2].availableCount").value(1));
+    }
+
+    @Test
     void createMeaningToWordQuiz() throws Exception {
         mockMvc.perform(post("/api/quizzes")
                         .contentType(MediaType.APPLICATION_JSON)
