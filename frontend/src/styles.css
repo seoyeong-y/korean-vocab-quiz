@@ -654,6 +654,223 @@ dd {
   border-color: var(--color-danger);
 }
 
+.muted-option {
+  opacity: 0.72;
+}
+
+.literary-prompt {
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin: var(--space-5) 0;
+  padding: var(--space-5);
+}
+
+.literary-prompt h2,
+.literary-prompt p {
+  margin: var(--space-3) 0 0;
+}
+
+.literary-prompt h2 {
+  font-size: 22px;
+}
+
+.literary-work-list,
+.literary-feature {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.literary-feature {
+  white-space: pre-wrap;
+}
+
+.literature-admin-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: var(--space-6);
+}
+
+.literary-quick-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.literary-quick-button {
+  appearance: none;
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+}
+
+.literary-quick-button:hover:not(:disabled) {
+  border-color: var(--color-primary);
+}
+
+.literary-quick-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.literary-quick-button strong,
+.literary-quick-button small {
+  display: block;
+}
+
+.literary-image-section {
+  margin-top: var(--space-5);
+}
+
+.literature-image-review-list {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+}
+
+.literature-image-review-row {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.literature-image-review-row.needs-review-row {
+  background: #fffaf0;
+  border-color: #e7c969;
+}
+
+.literature-image-review-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.literature-image-review-meta > span:last-child {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.admin-form-block,
+.admin-data-section {
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+
+.admin-form-block h2,
+.admin-data-section h2 {
+  font-size: 18px;
+  margin: 0 0 var(--space-4);
+}
+
+.admin-form-block .primary-button {
+  margin-top: var(--space-3);
+}
+
+.admin-data-section {
+  margin-top: var(--space-5);
+}
+
+.admin-list-row {
+  align-items: center;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  line-height: 1.5;
+  padding: var(--space-3) 0;
+}
+
+.admin-list-row:first-of-type {
+  border-top: 0;
+}
+
+.admin-list-row > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-list-row button {
+  margin-left: var(--space-2);
+}
+
+.literature-csv-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+  overflow-x: auto;
+}
+
+.literature-csv-row {
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: auto minmax(110px, 1fr) minmax(140px, 1fr) minmax(180px, 2fr) 130px minmax(150px, 1.5fr);
+  min-width: 820px;
+  padding: var(--space-2);
+}
+
+.literature-csv-row.needs-review-row {
+  background: #fffaf0;
+  border-color: #e7c969;
+}
+
+.literature-csv-row input,
+.literature-csv-row select {
+  min-width: 0;
+}
+
+.literature-csv-row > span {
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+@media (max-width: 900px) {
+  .literature-admin-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .literary-quick-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .literary-prompt {
+    padding: var(--space-4);
+  }
+
+  .literary-prompt h2 {
+    font-size: 19px;
+  }
+
+  .admin-form-block,
+  .admin-data-section {
+    padding: var(--space-4);
+  }
+
+  .admin-list-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-list-row > span:last-child {
+    display: flex;
+    margin-left: auto;
+  }
+}
+
 .mastered-button {
   background: var(--color-surface-soft);
   border: 1px solid var(--color-border);

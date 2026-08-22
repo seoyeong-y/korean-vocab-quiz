@@ -13,6 +13,24 @@ import {
   getQuizAvailability,
   getStatisticsDashboard,
   getWrongAnswers,
+  createLiteraryAuthor,
+  createLiteraryFeature,
+  createLiteraryQuiz,
+  createLiteraryWork,
+  deleteLiteraryAuthor,
+  deleteLiteraryFeature,
+  deleteLiteraryWork,
+  getLiteraryAuthors,
+  getLiteraryFeatures,
+  getLiteraryWorks,
+  extractLiteraryImages,
+  importLiteraryCsv,
+  previewLiteraryCsv,
+  saveLiteraryImageBatch,
+  submitLiteraryQuizAnswer,
+  updateLiteraryAuthor,
+  updateLiteraryFeature,
+  updateLiteraryWork,
   logoutAdmin,
   markQuizQuestionMastered,
   saveVocabularyBatch,
@@ -86,6 +104,10 @@ function App() {
   const [loading, setLoading] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [literaryQuestions, setLiteraryQuestions] = React.useState([]);
+  const [literaryIndex, setLiteraryIndex] = React.useState(0);
+  const [literaryAnswers, setLiteraryAnswers] = React.useState({});
+  const [literarySettings, setLiterarySettings] = React.useState({ quizType: 'WORK_GUESS', questionCount: 5 });
 
   const currentQuestion = questions[currentIndex];
   const currentQuestionState = currentQuestion ? questionStates[currentQuestion.questionId] || {} : {};
@@ -99,6 +121,11 @@ function App() {
   const correctCount = answers.filter((answer) => answer.correct).length;
   const incorrectCount = answers.length - correctCount;
   const accuracy = answers.length ? Math.round((correctCount / answers.length) * 100) : 0;
+  const literaryQuestion = literaryQuestions[literaryIndex];
+  const literaryAnswerList = Object.values(literaryAnswers);
+  const literaryCorrectCount = literaryAnswerList.filter((answer) => answer.correct).length;
+  const literaryIncorrectCount = literaryAnswerList.length - literaryCorrectCount;
+  const literaryAccuracy = literaryAnswerList.length ? Math.round((literaryCorrectCount / literaryAnswerList.length) * 100) : 0;
 
   React.useEffect(() => {
     window.history.replaceState(null, '', screen === 'start' ? '#home' : `#${screen}`);
@@ -320,6 +347,53 @@ function App() {
     } finally {
       setAvailabilityLoading(false);
     }
+  }
+
+  async function handleStartLiterary(event, requestedType) {
+    event?.preventDefault();
+    const quizType = requestedType || literarySettings.quizType;
+    const questionCount = Number(settings.questionCount);
+    setLoading(true);
+    setError('');
+    try {
+      const quiz = await createLiteraryQuiz({ quizType, questionCount });
+      if (!Array.isArray(quiz) || quiz.length === 0) throw new Error('생성된 작가·작품 퀴즈가 없습니다. 문학 데이터를 먼저 등록해 주세요.');
+      setLiterarySettings({ quizType, questionCount });
+      setLiteraryQuestions(quiz);
+      setLiteraryAnswers({});
+      setLiteraryIndex(0);
+      setScreen('literaryQuiz');
+    } catch (literaryError) {
+      setError(normalizeError(literaryError.message));
+      setScreen('start');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleLiteraryAnswer(option) {
+    if (!literaryQuestion || literaryAnswers[literaryQuestion.questionId] || submitting) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const result = await submitLiteraryQuizAnswer(literaryQuestion.questionId, option.optionId);
+      setLiteraryAnswers((previous) => ({
+        ...previous,
+        [literaryQuestion.questionId]: { ...result, selectedOptionId: option.optionId, selectedText: option.text },
+      }));
+    } catch (answerError) {
+      setError(normalizeError(answerError.message));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function resetLiterary() {
+    setLiteraryQuestions([]);
+    setLiteraryAnswers({});
+    setLiteraryIndex(0);
+    setScreen('start');
+    setError('');
   }
 
   React.useEffect(() => {
@@ -601,11 +675,32 @@ function App() {
           onOpenWrongAnswers={loadWrongAnswers}
           onOpenMyPage={loadMyPage}
           onOpenAdmin={() => setScreen('admin')}
+          onStartLiterary={(type) => handleStartLiterary(null, type)}
         />
       )}
 
       {screen === 'admin' && (
-        <AdminImageVocabularyScreen onBack={handleRetry} />
+        <AdminImageVocabularyScreen onBack={handleRetry} onOpenLiterature={() => setScreen('literaryAdmin')} />
+      )}
+
+      {screen === 'literaryAdmin' && <LiteratureAdminScreen onBack={handleRetry} />}
+
+      {screen === 'literaryQuiz' && literaryQuestion && (
+        <LiteraryQuizScreen
+          question={literaryQuestion}
+          currentIndex={literaryIndex}
+          totalCount={literaryQuestions.length}
+          answer={literaryAnswers[literaryQuestion.questionId]}
+          submitting={submitting}
+          error={error}
+          onAnswer={handleLiteraryAnswer}
+          onNext={() => literaryIndex === literaryQuestions.length - 1 ? setScreen('literaryResult') : setLiteraryIndex((index) => index + 1)}
+          onBack={resetLiterary}
+        />
+      )}
+
+      {screen === 'literaryResult' && (
+        <LiteraryResultScreen totalCount={literaryAnswerList.length} correctCount={literaryCorrectCount} incorrectCount={literaryIncorrectCount} accuracy={literaryAccuracy} onRetry={resetLiterary} onHome={handleRetry} />
       )}
 
       {screen === 'wrongAnswers' && (
@@ -689,6 +784,7 @@ function StartScreen({
   onOpenWrongAnswers,
   onOpenMyPage,
   onOpenAdmin,
+  onStartLiterary,
 }) {
   const questionCountValue = Number(settings.questionCount);
   const [selectedQuestionCountOption, setSelectedQuestionCountOption] = React.useState(() => (
@@ -766,6 +862,23 @@ function StartScreen({
             ))}
           </div>
           {availabilityError && <p className="field-hint availability-error">{availabilityError}</p>}
+        </fieldset>
+
+        <fieldset>
+          <legend>
+            <span>문학 퀴즈</span>
+            <small>작품이나 작가를 바로 선택해 시작하세요.</small>
+          </legend>
+          <div className="literary-quick-grid">
+            <button className="choice literary-quick-button" disabled={loading} type="button" onClick={() => onStartLiterary('WORK_GUESS')}>
+              <strong>작품 맞히기</strong>
+              <small>작가와 특징을 보고 작품을 고릅니다.</small>
+            </button>
+            <button className="choice literary-quick-button" disabled={loading} type="button" onClick={() => onStartLiterary('AUTHOR_GUESS')}>
+              <strong>작가 맞히기</strong>
+              <small>작품과 특징을 보고 작가를 고릅니다.</small>
+            </button>
+          </div>
         </fieldset>
 
         <fieldset>
@@ -1211,7 +1324,7 @@ function LearningWordItem({ category, title, description, meta }) {
   );
 }
 
-function AdminImageVocabularyScreen({ onBack }) {
+function AdminImageVocabularyScreen({ onBack, onOpenLiterature }) {
   const [authenticated, setAuthenticated] = React.useState(null);
   const [adminPassword, setAdminPassword] = React.useState('');
   const [authLoading, setAuthLoading] = React.useState(true);
@@ -1418,6 +1531,9 @@ function AdminImageVocabularyScreen({ onBack }) {
         </div>
         <button className="secondary-button" disabled={loading || saving} type="button" onClick={onBack}>
           ← 홈으로
+        </button>
+        <button className="secondary-button" disabled={loading || saving} type="button" onClick={onOpenLiterature}>
+          작가·작품 관리
         </button>
         <button className="secondary-button" disabled={loading || saving} type="button" onClick={handleAdminLogout}>
           로그아웃
@@ -2063,6 +2179,238 @@ function optionFeedbackLabel(option, optionIndex, selectedOptionId, feedback) {
   return optionIndex + 1;
 }
 
+function LiteraryStartScreen({ settings, loading, error, onChange, onStart, onBack, onAdmin }) {
+  return (
+    <section className="panel start-panel" aria-labelledby="literary-start-title">
+      <div className="screen-heading">
+        <div>
+          <p className="eyebrow">KBS 한국어능력시험 문학 학습</p>
+          <h1 id="literary-start-title">작가·작품 퀴즈</h1>
+          <p className="screen-description">DB에 등록된 근현대 문학 작가, 작품, 특징만으로 문제를 만듭니다.</p>
+        </div>
+        <button className="secondary-button" type="button" onClick={onBack}>← 홈으로</button>
+      </div>
+      <form className="quiz-form" onSubmit={onStart}>
+        <fieldset>
+          <legend><span>퀴즈 유형</span><small>정답으로 맞힐 대상을 선택하세요.</small></legend>
+          <div className="mode-group">
+            <label className="choice">
+              <input type="radio" name="literary-type" checked={settings.quizType === 'WORK_GUESS'} onChange={() => onChange({ ...settings, quizType: 'WORK_GUESS' })} />
+              <span><strong>작품 맞히기</strong><small>작가와 특징을 보고 작품을 고릅니다.</small></span>
+            </label>
+            <label className="choice">
+              <input type="radio" name="literary-type" checked={settings.quizType === 'AUTHOR_GUESS'} onChange={() => onChange({ ...settings, quizType: 'AUTHOR_GUESS' })} />
+              <span><strong>작가 맞히기</strong><small>작품과 특징을 보고 작가를 고릅니다.</small></span>
+            </label>
+          </div>
+        </fieldset>
+        <label className="field-label" htmlFor="literary-question-count">
+          <span>문제 수</span>
+          <input id="literary-question-count" min="1" max="100" type="number" value={settings.questionCount} onChange={(event) => onChange({ ...settings, questionCount: event.target.value })} />
+        </label>
+        {error && <ErrorMessage message={error} />}
+        <div className="start-action-row">
+          <button className="primary-button" disabled={loading} type="submit">{loading ? '퀴즈 로딩 중' : '퀴즈 시작'}</button>
+          <button className="secondary-button" disabled={loading} type="button" onClick={onAdmin}>작가·작품 관리</button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function LiteraryQuizScreen({ question, currentIndex, totalCount, answer, submitting, error, onAnswer, onNext, onBack }) {
+  const isAuthorGuess = question.quizType === 'AUTHOR_GUESS';
+  return (
+    <section className="panel quiz-panel" aria-labelledby="literary-question-title">
+      <div className="quiz-header">
+        <p className="question-count">문제 {currentIndex + 1} / {totalCount}</p>
+        <button className="secondary-button" type="button" onClick={onBack}>← 처음으로</button>
+      </div>
+      <div className="progress-track"><div className="progress-bar" style={{ width: `${((currentIndex + 1) / totalCount) * 100}%` }} /></div>
+      <div className="literary-prompt">
+        <span className="category-badge">{isAuthorGuess ? '작가 맞히기' : '작품 맞히기'}</span>
+        <h2>{question.authorName && !isAuthorGuess ? `작가: ${question.authorName}` : null}</h2>
+        {question.workTitles?.length > 0 && <p className="literary-work-list"><strong>작품</strong> {question.workTitles.join(' · ')}</p>}
+        <p className="literary-feature"><strong>특징</strong> {question.feature}</p>
+      </div>
+      <h1 id="literary-question-title" className="question-text">{question.questionText}</h1>
+      <div className="options" role="list">
+        {question.options.map((option, index) => (
+          <button key={option.optionId} className={literaryOptionClass(option, answer)} disabled={Boolean(answer) || submitting} type="button" onClick={() => onAnswer(option)}>
+            <span className="option-marker">{answer?.correctAnswer === option.text ? '정답' : index + 1}</span><span>{option.text}</span>
+          </button>
+        ))}
+      </div>
+      {submitting && <p className="status-message">정답 확인 중</p>}
+      {error && <ErrorMessage message={error} />}
+      {answer && <div className={answer.correct ? 'feedback correct' : 'feedback incorrect'}><strong>{answer.correct ? '정답입니다.' : '오답입니다.'}</strong>{!answer.correct && <span>정답: {answer.correctAnswer}</span>}</div>}
+      <div className="quiz-navigation"><span /><button className="primary-button next-button" disabled={!answer || submitting} type="button" onClick={onNext}>{currentIndex === totalCount - 1 ? '결과 보기' : '다음 문제 →'}</button></div>
+    </section>
+  );
+}
+
+function literaryOptionClass(option, answer) {
+  if (!answer) return 'option-button';
+  if (option.text === answer.correctAnswer) return 'option-button correct-option';
+  if (option.optionId === answer.selectedOptionId) return 'option-button wrong-option';
+  return 'option-button muted-option';
+}
+
+function LiteraryResultScreen({ totalCount, correctCount, incorrectCount, accuracy, onRetry, onHome }) {
+  return (
+    <section className="panel result-panel" aria-labelledby="literary-result-title">
+      <p className="eyebrow">Literature Quiz Result</p><h1 id="literary-result-title">작가·작품 퀴즈 결과</h1><p className="result-score">{accuracy}%</p>
+      <dl className="result-grid"><div><dt>총 문제 수</dt><dd>{totalCount}</dd></div><div><dt>정답 수</dt><dd>{correctCount}</dd></div><div><dt>오답 수</dt><dd>{incorrectCount}</dd></div><div><dt>정답률</dt><dd>{accuracy}%</dd></div></dl>
+      <div className="action-row result-actions"><button className="primary-button" type="button" onClick={onRetry}>다시 풀기</button><button className="secondary-button" type="button" onClick={onHome}>← 홈으로</button></div>
+    </section>
+  );
+}
+
+function LiteratureAdminScreen({ onBack }) {
+  const [authenticated, setAuthenticated] = React.useState(null);
+  const [password, setPassword] = React.useState('');
+  const [authError, setAuthError] = React.useState('');
+  const [authors, setAuthors] = React.useState([]);
+  const [works, setWorks] = React.useState([]);
+  const [features, setFeatures] = React.useState([]);
+  const [authorName, setAuthorName] = React.useState('');
+  const [workForm, setWorkForm] = React.useState({ authorId: '', title: '' });
+  const [featureForm, setFeatureForm] = React.useState({ authorId: '', workId: '', type: 'WORK', content: '' });
+  const [csvRows, setCsvRows] = React.useState([]);
+  const [csvResult, setCsvResult] = React.useState(null);
+  const [imageFiles, setImageFiles] = React.useState([]);
+  const [imageRows, setImageRows] = React.useState([]);
+  const [imageResult, setImageResult] = React.useState(null);
+  const [imageLoading, setImageLoading] = React.useState(false);
+  const [imageSaving, setImageSaving] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState('');
+
+  async function refresh() {
+    const [nextAuthors, nextWorks, nextFeatures] = await Promise.all([getLiteraryAuthors(), getLiteraryWorks(), getLiteraryFeatures()]);
+    setAuthors(nextAuthors || []); setWorks(nextWorks || []); setFeatures(nextFeatures || []);
+    if (!workForm.authorId && nextAuthors?.[0]) setWorkForm((value) => ({ ...value, authorId: String(nextAuthors[0].id) }));
+    if (!featureForm.authorId && nextAuthors?.[0]) setFeatureForm((value) => ({ ...value, authorId: String(nextAuthors[0].id) }));
+  }
+
+  React.useEffect(() => {
+    getAdminAuthStatus().then((result) => setAuthenticated(Boolean(result.authenticated))).catch(() => setAuthenticated(false));
+  }, []);
+  React.useEffect(() => {
+    if (authenticated) refresh().catch((loadError) => setError(normalizeError(loadError.message))).finally(() => setLoading(false));
+    else if (authenticated === false) setLoading(false);
+  }, [authenticated]);
+
+  async function login(event) { event.preventDefault(); setAuthError(''); try { await authenticateAdmin(password); setAuthenticated(true); setPassword(''); } catch (loginError) { setAuthError(normalizeError(loginError.message)); } }
+  async function run(action) { setError(''); try { await action(); await refresh(); } catch (actionError) { setError(normalizeError(actionError.message)); } }
+  async function createAuthor(event) { event.preventDefault(); await run(async () => { await createLiteraryAuthor({ name: authorName }); setAuthorName(''); }); }
+  async function editAuthor(author) { const name = window.prompt('작가명', author.name); if (name) await run(() => updateLiteraryAuthor(author.id, { name })); }
+  async function editWork(work) { const title = window.prompt('작품명', work.title); if (title) await run(() => updateLiteraryWork(work.id, { authorId: work.authorId, title })); }
+  async function editFeature(feature) { const content = window.prompt('특징', feature.content); if (content) await run(() => updateLiteraryFeature(feature.id, { authorId: feature.authorId, workId: feature.workId, type: feature.type, content })); }
+  async function remove(action) { if (window.confirm('삭제할까요?')) await run(action); }
+  async function createWork(event) { event.preventDefault(); await run(async () => { await createLiteraryWork({ authorId: Number(workForm.authorId), title: workForm.title }); setWorkForm((value) => ({ ...value, title: '' })); }); }
+  async function createFeature(event) { event.preventDefault(); await run(async () => { await createLiteraryFeature({ authorId: Number(featureForm.authorId), workId: featureForm.type === 'WORK' ? Number(featureForm.workId) : null, type: featureForm.type, content: featureForm.content }); setFeatureForm((value) => ({ ...value, content: '' })); }); }
+  async function preview(event) { const file = event.target.files?.[0]; if (!file) return; try { const result = await previewLiteraryCsv(file); setCsvRows((result.rows || []).map((row) => ({ ...row, selected: row.status !== 'ERROR' }))); setCsvResult(null); } catch (csvError) { setError(normalizeError(csvError.message)); } }
+  async function importRows() { try { const result = await importLiteraryCsv(csvRows); setCsvResult(result); await refresh(); } catch (csvError) { setError(normalizeError(csvError.message)); } }
+  function handleImageFiles(event) {
+    const selectedFiles = Array.from(event.target.files || []);
+    const validationMessage = validateImageFiles(selectedFiles);
+    if (validationMessage) {
+      setImageFiles([]);
+      setImageRows([]);
+      setError(validationMessage);
+      event.target.value = '';
+      return;
+    }
+    setImageFiles(selectedFiles);
+    setImageRows([]);
+    setImageResult(null);
+    setError('');
+  }
+  async function extractLiteratureImages() {
+    setImageLoading(true);
+    setImageResult(null);
+    setError('');
+    try {
+      const result = await extractLiteraryImages(imageFiles);
+      setImageRows((result.rows || []).map((row, index) => ({
+        ...row,
+        localId: `literary-image-${row.rowNumber}-${index}`,
+        selected: row.status === 'NORMAL' && row.featureType !== 'UNRESOLVED',
+      })));
+    } catch (extractError) {
+      if (extractError.message.includes('Admin authentication is required')) setAuthenticated(false);
+      setError(normalizeError(extractError.message));
+    } finally {
+      setImageLoading(false);
+    }
+  }
+  function updateImageRow(localId, field, value) {
+    setImageRows((rows) => rows.map((row) => row.localId === localId ? { ...row, [field]: value } : row));
+  }
+  async function saveImageRows() {
+    const selectedRows = imageRows.filter((row) => row.selected);
+    setImageSaving(true);
+    setImageResult(null);
+    setError('');
+    try {
+      const result = await saveLiteraryImageBatch(selectedRows.map((row) => ({
+        rowNumber: row.rowNumber,
+        selected: true,
+        author: row.author,
+        work: row.work,
+        feature: row.feature,
+        featureType: row.featureType === 'UNRESOLVED' ? null : row.featureType,
+      })));
+      setImageResult({
+        ...result,
+        sourceItems: selectedRows,
+        skippedRows: result.rows?.filter((row) => row.status === 'DUPLICATE'),
+        failedRows: result.rows?.filter((row) => row.status === 'ERROR'),
+      });
+      await refresh();
+    } catch (saveError) {
+      if (saveError.message.includes('Admin authentication is required')) setAuthenticated(false);
+      setError(normalizeError(saveError.message));
+    } finally {
+      setImageSaving(false);
+    }
+  }
+
+  if (authenticated === null || loading) return <section className="panel admin-panel"><p className="status-message">문학 관리자 화면을 불러오는 중</p></section>;
+  if (!authenticated) return <section className="panel admin-panel admin-login-panel"><div className="screen-heading"><div><p className="eyebrow">관리자</p><h1>작가·작품 관리</h1><p className="screen-description">문학 데이터 변경에는 관리자 인증이 필요합니다.</p></div><button className="secondary-button" type="button" onClick={onBack}>← 홈으로</button></div><form className="admin-login-form" onSubmit={login}><label className="field-label"><span>관리자 비밀번호</span><input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>{authError && <ErrorMessage message={authError} />}<button className="primary-button" disabled={!password} type="submit">관리자 페이지 열기</button></form></section>;
+
+  return <section className="panel admin-panel" aria-labelledby="literature-admin-title">
+    <div className="screen-heading"><div><p className="eyebrow">관리자</p><h1 id="literature-admin-title">작가·작품 관리</h1><p className="screen-description">작가, 작품, 특징을 등록하고 CSV를 검수한 뒤 저장합니다.</p></div><button className="secondary-button" type="button" onClick={onBack}>← 홈으로</button></div>
+    {error && <ErrorMessage message={error} />}
+    <div className="literature-admin-grid">
+      <form className="admin-form-block" onSubmit={createAuthor}><h2>작가 등록</h2><label className="field-label"><span>작가명</span><input value={authorName} onChange={(event) => setAuthorName(event.target.value)} required /></label><button className="primary-button" type="submit">작가 추가</button></form>
+      <form className="admin-form-block" onSubmit={createWork}><h2>작품 등록</h2><label className="field-label"><span>작가</span><select value={workForm.authorId} onChange={(event) => setWorkForm({ ...workForm, authorId: event.target.value })}>{authors.map((author) => <option key={author.id} value={author.id}>{author.name}</option>)}</select></label><label className="field-label"><span>작품명</span><input value={workForm.title} onChange={(event) => setWorkForm({ ...workForm, title: event.target.value })} required /></label><button className="primary-button" type="submit">작품 추가</button></form>
+      <form className="admin-form-block" onSubmit={createFeature}><h2>특징 등록</h2><label className="field-label"><span>작가</span><select value={featureForm.authorId} onChange={(event) => setFeatureForm({ ...featureForm, authorId: event.target.value })}>{authors.map((author) => <option key={author.id} value={author.id}>{author.name}</option>)}</select></label><label className="field-label"><span>특징 종류</span><select value={featureForm.type} onChange={(event) => setFeatureForm({ ...featureForm, type: event.target.value, workId: '' })}><option value="WORK">작품 특징</option><option value="AUTHOR">작가 특징</option></select></label>{featureForm.type === 'WORK' && <label className="field-label"><span>작품</span><select value={featureForm.workId} onChange={(event) => setFeatureForm({ ...featureForm, workId: event.target.value })}>{works.filter((work) => String(work.authorId) === String(featureForm.authorId)).map((work) => <option key={work.id} value={work.id}>{work.title}</option>)}</select></label>}<label className="field-label"><span>특징</span><textarea rows="3" value={featureForm.content} onChange={(event) => setFeatureForm({ ...featureForm, content: event.target.value })} required /></label><button className="primary-button" type="submit">특징 추가</button></form>
+    </div>
+    <section className="admin-data-section literature-image-section">
+      <h2>교재 사진에서 문학 데이터 추출</h2>
+      <p className="field-hint">사진에서 읽은 작가·작품·특징을 DB에 바로 저장하지 않고 먼저 검수합니다.</p>
+      <label className="file-drop-label" htmlFor="literature-image-files"><span>교재 사진 선택</span><small>jpg, jpeg, png, webp / 최대 5장 / 파일당 10MB / 전체 50MB</small><input id="literature-image-files" accept="image/jpeg,image/png,image/webp" multiple type="file" disabled={imageLoading || imageSaving} onChange={handleImageFiles} /></label>
+      <div className="admin-action-row"><button className="primary-button" type="button" disabled={imageLoading || imageSaving || imageFiles.length === 0} onClick={extractLiteratureImages}>{imageLoading ? '문학 데이터 추출 중' : '사진에서 문학 데이터 추출'}</button><span className="field-hint">{imageFiles.length}개 이미지 선택됨</span></div>
+      {imageLoading && <p className="status-message">Gemini가 사진을 분석하는 중입니다. 완료될 때까지 이 화면을 닫지 마세요.</p>}
+      {imageRows.length > 0 && <>
+        <div className="review-toolbar"><div><strong>추출 항목 {imageRows.length}개</strong><span>선택 {imageRows.filter((row) => row.selected).length}개</span></div><div className="action-row"><button className="secondary-button" type="button" disabled={imageSaving} onClick={() => setImageRows((rows) => rows.map((row) => ({ ...row, selected: row.featureType !== 'UNRESOLVED' })))}>전체 선택</button><button className="secondary-button" type="button" disabled={imageSaving} onClick={() => setImageRows((rows) => rows.map((row) => ({ ...row, selected: false })))}>전체 선택 해제</button></div></div>
+        <div className="literature-image-review-list">{imageRows.map((row) => <article className={`literature-image-review-row ${row.needsReview || row.featureType === 'UNRESOLVED' ? 'needs-review-row' : ''}`} key={row.localId}>
+          <div className="literature-image-review-meta"><label className="admin-checkbox"><input type="checkbox" checked={row.selected} disabled={imageSaving || row.featureType === 'UNRESOLVED'} onChange={(event) => updateImageRow(row.localId, 'selected', event.target.checked)} /> 저장</label><span className="category-badge">이미지 {row.imageNumber}</span><span className="review-badge">{row.featureType || '작품만 등록'}</span><span>{row.status} {row.reason && `· ${row.reason}`}</span></div>
+          <div className="admin-edit-grid"><label className="field-label"><span>작가</span><input value={row.author || ''} disabled={imageSaving} onChange={(event) => updateImageRow(row.localId, 'author', event.target.value)} /></label><label className="field-label"><span>작품</span><input value={row.work || ''} disabled={imageSaving} onChange={(event) => updateImageRow(row.localId, 'work', event.target.value)} /></label><label className="field-label"><span>특징</span><textarea rows="3" value={row.feature || ''} disabled={imageSaving} onChange={(event) => updateImageRow(row.localId, 'feature', event.target.value)} /></label><label className="field-label"><span>특징 종류</span><select value={row.featureType || 'UNRESOLVED'} disabled={imageSaving} onChange={(event) => { const featureType = event.target.value === 'UNRESOLVED' ? null : event.target.value; updateImageRow(row.localId, 'featureType', featureType); updateImageRow(row.localId, 'needsReview', !featureType); updateImageRow(row.localId, 'status', featureType ? 'NORMAL' : 'NEEDS_REVIEW'); }}><option value="UNRESOLVED">확인 필요</option><option value="WORK">작품 특징</option><option value="AUTHOR">작가 특징</option></select></label></div>
+        </article>)}</div>
+        <button className="primary-button" type="button" disabled={imageSaving || imageRows.filter((row) => row.selected).length === 0} onClick={saveImageRows}>{imageSaving ? '저장 중' : '검수 완료 및 저장'}</button>
+      </>}
+      {imageResult && <BatchSaveResult result={imageResult} />}
+    </section>
+    <section className="admin-data-section"><h2>CSV Preview / Import</h2><label className="file-drop-label"><span>CSV 선택</span><small>author,work,feature,feature_type / 최대 5MB</small><input type="file" accept=".csv,text/csv" onChange={preview} /></label>{csvRows.length > 0 && <><p className="field-hint">전체 {csvRows.length}행 · 선택 {csvRows.filter((row) => row.selected).length}행</p><div className="literature-csv-list">{csvRows.map((row, index) => <div className={`literature-csv-row ${row.status !== 'NORMAL' ? 'needs-review-row' : ''}`} key={`${row.rowNumber}-${index}`}><input type="checkbox" checked={row.selected} onChange={(event) => setCsvRows((rows) => rows.map((item, itemIndex) => itemIndex === index ? { ...item, selected: event.target.checked } : item))} /><input value={row.author || ''} onChange={(event) => setCsvRows((rows) => rows.map((item, itemIndex) => itemIndex === index ? { ...item, author: event.target.value } : item))} /><input value={row.work || ''} onChange={(event) => setCsvRows((rows) => rows.map((item, itemIndex) => itemIndex === index ? { ...item, work: event.target.value } : item))} /><input value={row.feature || ''} onChange={(event) => setCsvRows((rows) => rows.map((item, itemIndex) => itemIndex === index ? { ...item, feature: event.target.value } : item))} /><select value={row.featureType || ''} onChange={(event) => setCsvRows((rows) => rows.map((item, itemIndex) => itemIndex === index ? { ...item, featureType: event.target.value || null, status: event.target.value ? 'NORMAL' : 'NEEDS_REVIEW' } : item))}><option value="">확인 필요</option><option value="WORK">WORK</option><option value="AUTHOR">AUTHOR</option></select><span>{row.status} {row.reason && `· ${row.reason}`}</span></div>)}</div><button className="primary-button" type="button" disabled={!csvRows.some((row) => row.selected)} onClick={importRows}>검수 완료 및 저장</button></>}{csvResult && <BatchSaveResult result={{ ...csvResult, skippedRows: csvResult.rows?.filter((row) => row.status === 'DUPLICATE'), failedRows: csvResult.rows?.filter((row) => row.status === 'ERROR') }} />}</section>
+    <section className="admin-data-section"><h2>작가</h2>{authors.map((author) => <div className="admin-list-row" key={author.id}><span>{author.name}</span><span><button className="secondary-button" type="button" onClick={() => editAuthor(author)}>수정</button><button className="danger-button quiet-danger" type="button" onClick={() => remove(() => deleteLiteraryAuthor(author.id))}>삭제</button></span></div>)}</section>
+    <section className="admin-data-section"><h2>작품</h2>{works.map((work) => <div className="admin-list-row" key={work.id}><span>{work.authorName} · {work.title}</span><span><button className="secondary-button" type="button" onClick={() => editWork(work)}>수정</button><button className="danger-button quiet-danger" type="button" onClick={() => remove(() => deleteLiteraryWork(work.id))}>삭제</button></span></div>)}</section>
+    <section className="admin-data-section"><h2>특징</h2>{features.map((feature) => <div className="admin-list-row" key={feature.id}><span><b>{feature.type}</b> {feature.authorName}{feature.workTitle ? ` · ${feature.workTitle}` : ''} · {feature.content}</span><span><button className="secondary-button" type="button" onClick={() => editFeature(feature)}>수정</button><button className="danger-button quiet-danger" type="button" onClick={() => remove(() => deleteLiteraryFeature(feature.id))}>삭제</button></span></div>)}</section>
+  </section>;
+}
+
 function normalizeError(message) {
   if (message.includes('Invalid admin password')) {
     return '관리자 비밀번호가 올바르지 않습니다.';
@@ -2093,6 +2441,9 @@ function normalizeError(message) {
   }
   if (message.includes('Text answers are only supported')) {
     return '입력 답안은 외래어 퀴즈에서만 사용할 수 있습니다.';
+  }
+  if (message.includes('문학 퀴즈') || message.includes('literary') || message.includes('feature')) {
+    return message;
   }
   if (message.includes('Submit either selectedAnswer')) {
     return '답안은 입력하거나 선택지 중 하나만 제출해 주세요.';

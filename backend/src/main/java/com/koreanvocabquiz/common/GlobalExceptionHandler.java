@@ -8,6 +8,8 @@ import com.koreanvocabquiz.quiz.QuizSubmissionException;
 import com.koreanvocabquiz.statistics.QuizHistoryCompletionException;
 import com.koreanvocabquiz.vocabulary.InvalidCsvException;
 import com.koreanvocabquiz.vocabulary.VocabularyImageExtractionException;
+import com.koreanvocabquiz.literature.LiteratureValidationException;
+import com.koreanvocabquiz.literature.LiteraryImageAnalysisException;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -64,6 +66,18 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST.getReasonPhrase(),
                         List.of(exception.getMessage())
                 ));
+    }
+
+    @ExceptionHandler(LiteratureValidationException.class)
+    public ResponseEntity<ApiErrorResponse> handleLiteratureValidation(LiteratureValidationException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.of(HttpStatus.BAD_REQUEST.value(), HttpStatus.BAD_REQUEST.getReasonPhrase(), List.of(exception.getMessage())));
+    }
+
+    @ExceptionHandler(LiteraryImageAnalysisException.class)
+    public ResponseEntity<ApiErrorResponse> handleLiteraryImageAnalysis(LiteraryImageAnalysisException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.of(HttpStatus.BAD_REQUEST.value(), HttpStatus.BAD_REQUEST.getReasonPhrase(), List.of(exception.getMessage())));
     }
 
     @ExceptionHandler(VocabularyImageExtractionException.class)
