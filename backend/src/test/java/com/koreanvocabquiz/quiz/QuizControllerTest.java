@@ -68,6 +68,7 @@ class QuizControllerTest {
 
     private Vocabulary apple;
     private Vocabulary banana;
+    private Vocabulary camera;
 
     @BeforeEach
     void setUp() {
@@ -78,6 +79,7 @@ class QuizControllerTest {
 
         apple = vocabularyRepository.save(new Vocabulary("사과", "apple", VocabularyCategory.NOUN, null));
         banana = vocabularyRepository.save(new Vocabulary("바나나", "banana", VocabularyCategory.NOUN, null));
+        camera = vocabularyRepository.save(new Vocabulary("카메라", "camera", VocabularyCategory.LOANWORD, null));
         vocabularyRepository.save(new Vocabulary("포도", "grape", VocabularyCategory.NOUN, null));
         vocabularyRepository.save(new Vocabulary("딸기", "strawberry", VocabularyCategory.NOUN, null));
         vocabularyRepository.save(new Vocabulary("달리다", "run", VocabularyCategory.VERB, null));
@@ -609,6 +611,57 @@ class QuizControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.messages[0]").value("At least 4 vocabularies are required in the category to create multiple-choice quizzes."));
+    }
+
+    @Test
+    void rejectUnsupportedModeForLoanwordQuiz() throws Exception {
+        mockMvc.perform(post("/api/quizzes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "LOANWORD",
+                                  "mode": "WORD_TO_MEANING",
+                                  "questionCount": 1
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.messages[0]").value("LOANWORD quizzes only support MEANING_TO_WORD mode."));
+    }
+
+    @Test
+    void createLoanwordQuizUsesWrittenAnswerWithoutOptions() throws Exception {
+        String content = mockMvc.perform(post("/api/quizzes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "LOANWORD",
+                                  "mode": "MEANING_TO_WORD",
+                                  "questionCount": 1
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].mode").value("MEANING_TO_WORD"))
+                .andExpect(jsonPath("$[0].questionText").value("camera"))
+                .andExpect(jsonPath("$[0].options", hasSize(0)))
+                .andExpect(jsonPath("$[0].correctAnswer").doesNotExist())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        QuizQuestionResponse question = objectMapper.readValue(content, new TypeReference<List<QuizQuestionResponse>>() {
+        }).get(0);
+
+        mockMvc.perform(post("/api/quizzes/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s",
+                                  "selectedAnswer": "카메라"
+                                }
+                                """.formatted(question.questionId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.correct").value(true))
+                .andExpect(jsonPath("$.correctAnswer").value("카메라"));
     }
 
     @Test

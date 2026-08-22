@@ -6,8 +6,9 @@ public record QuizSubmitRequest(
         @NotBlank
         String questionId,
 
-        @NotBlank
         String selectedOptionId,
+
+        String selectedAnswer,
 
         boolean wrongAnswerReview
 ) {

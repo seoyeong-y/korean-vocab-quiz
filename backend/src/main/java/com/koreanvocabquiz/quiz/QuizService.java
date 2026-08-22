@@ -15,6 +15,7 @@ import com.koreanvocabquiz.learning.VocabularyLearningProgress;
 import com.koreanvocabquiz.learning.VocabularyLearningProgressRepository;
 import com.koreanvocabquiz.learning.VocabularyLearningProgressService;
 import com.koreanvocabquiz.vocabulary.Vocabulary;
+import com.koreanvocabquiz.vocabulary.VocabularyCategory;
 import com.koreanvocabquiz.vocabulary.VocabularyRepository;
 import com.koreanvocabquiz.wronganswer.WrongAnswerService;
 
@@ -51,6 +52,7 @@ public class QuizService {
     }
 
     public List<QuizQuestionResponse> create(QuizCreateRequest request) {
+        validateMode(request);
         List<Vocabulary> vocabularies = vocabularyRepository.findByCategory(request.category());
         Set<Long> masteredVocabularyIds = masteredVocabularyRepository.findMasteredVocabularyIds();
         List<Vocabulary> quizVocabularies = vocabularies.stream()
@@ -59,6 +61,12 @@ public class QuizService {
         List<Vocabulary> prioritizedVocabularies = prioritizeByAttemptCount(quizVocabularies);
 
         return createFromVocabularies(prioritizedVocabularies, prioritizedVocabularies, request.mode(), request.questionCount(), false);
+    }
+
+    private void validateMode(QuizCreateRequest request) {
+        if (request.category() == VocabularyCategory.LOANWORD && request.mode() != QuizMode.MEANING_TO_WORD) {
+            throw new QuizGenerationException("LOANWORD quizzes only support MEANING_TO_WORD mode.");
+        }
     }
 
     public List<QuizQuestionResponse> createFromVocabularies(List<Vocabulary> vocabularies, QuizMode mode, int questionCount) {
@@ -81,7 +89,11 @@ public class QuizService {
             int questionCount,
             boolean shuffleQuestions
     ) {
-        if (optionSourceVocabularies.size() < OPTION_COUNT) {
+        if (questionVocabularies.stream().anyMatch(vocabulary -> vocabulary.getCategory() == VocabularyCategory.LOANWORD)
+                && mode != QuizMode.MEANING_TO_WORD) {
+            throw new QuizGenerationException("LOANWORD quizzes only support MEANING_TO_WORD mode.");
+        }
+        if (optionSourceVocabularies.size() < OPTION_COUNT && !isWrittenAnswerQuiz(questionVocabularies)) {
             throw new QuizGenerationException("At least 4 vocabularies are required in the category to create multiple-choice quizzes.");
         }
         if (questionCount > questionVocabularies.size()) {
@@ -100,6 +112,12 @@ public class QuizService {
                 .limit(questionCount)
                 .map(vocabulary -> createQuestion(vocabulary, optionSourceVocabularies, resolveMode(mode)))
                 .toList();
+    }
+
+    private boolean isWrittenAnswerQuiz(List<Vocabulary> questionVocabularies) {
+        return !questionVocabularies.isEmpty()
+                && questionVocabularies.stream()
+                .allMatch(vocabulary -> vocabulary.getCategory() == VocabularyCategory.LOANWORD);
     }
 
     private List<Vocabulary> prioritizeByAttemptCount(List<Vocabulary> vocabularies) {
@@ -134,14 +152,27 @@ public class QuizService {
         QuizQuestionSession session = sessionStore.findValid(request.questionId())
                 .orElseThrow(() -> new QuizSubmissionException("Question is not valid or has expired."));
 
-        if (!session.optionVocabularyIds().containsKey(request.selectedOptionId())) {
-            throw new QuizSubmissionException("Selected option is not included in the question.");
-        }
-
         Vocabulary correctVocabulary = vocabularyRepository.findById(session.vocabularyId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vocabulary not found. id=" + session.vocabularyId()));
 
-        boolean correct = session.correctOptionId().equals(request.selectedOptionId());
+        boolean textAnswer = request.selectedAnswer() != null && !request.selectedAnswer().isBlank();
+        boolean optionAnswer = request.selectedOptionId() != null && !request.selectedOptionId().isBlank();
+        boolean loanwordQuestion = correctVocabulary.getCategory() == VocabularyCategory.LOANWORD
+                && session.mode() == QuizMode.MEANING_TO_WORD;
+        if (textAnswer && optionAnswer) {
+            throw new QuizSubmissionException("Submit either selectedAnswer or selectedOptionId, not both.");
+        }
+        if (textAnswer) {
+            if (!loanwordQuestion) {
+                throw new QuizSubmissionException("Text answers are only supported for LOANWORD quizzes.");
+            }
+        } else if (request.selectedOptionId() == null || !session.optionVocabularyIds().containsKey(request.selectedOptionId())) {
+            throw new QuizSubmissionException("Selected option is not included in the question.");
+        }
+
+        boolean correct = textAnswer
+                ? session.correctAnswer().equals(request.selectedAnswer().trim())
+                : session.correctOptionId().equals(request.selectedOptionId());
 
         if (request.wrongAnswerReview()) {
             wrongAnswerService.handleReviewSubmission(correctVocabulary, session.mode(), correct);
@@ -209,22 +240,25 @@ public class QuizService {
         List<QuizOptionResponse> options = new ArrayList<>();
         Map<String, Long> optionVocabularyIds = new HashMap<>();
 
-        String correctOptionId = sessionStore.nextId();
         String correctAnswer = answerText(vocabulary, mode);
-        options.add(new QuizOptionResponse(correctOptionId, correctAnswer));
-        optionVocabularyIds.put(correctOptionId, vocabulary.getId());
+        String correctOptionId = null;
+        if (vocabulary.getCategory() != VocabularyCategory.LOANWORD) {
+            correctOptionId = sessionStore.nextId();
+            options.add(new QuizOptionResponse(correctOptionId, correctAnswer));
+            optionVocabularyIds.put(correctOptionId, vocabulary.getId());
 
-        for (Vocabulary distractor : createDistractors(vocabulary, optionSourceVocabularies, mode)) {
-            String optionId = sessionStore.nextId();
-            options.add(new QuizOptionResponse(optionId, answerText(distractor, mode)));
-            optionVocabularyIds.put(optionId, distractor.getId());
+            for (Vocabulary distractor : createDistractors(vocabulary, optionSourceVocabularies, mode)) {
+                String optionId = sessionStore.nextId();
+                options.add(new QuizOptionResponse(optionId, answerText(distractor, mode)));
+                optionVocabularyIds.put(optionId, distractor.getId());
+            }
+
+            if (options.size() < OPTION_COUNT) {
+                throw new QuizGenerationException("At least 4 different option texts are required in the category.");
+            }
+
+            Collections.shuffle(options);
         }
-
-        if (options.size() < OPTION_COUNT) {
-            throw new QuizGenerationException("At least 4 different option texts are required in the category.");
-        }
-
-        Collections.shuffle(options);
 
         String questionId = sessionStore.nextId();
         sessionStore.save(new QuizQuestionSession(

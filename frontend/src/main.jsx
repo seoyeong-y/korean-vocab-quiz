@@ -293,6 +293,62 @@ function App() {
     }
   }
 
+  async function handleWrittenAnswer(value, draft = false) {
+    if (!currentQuestion || currentQuestionState.feedback || submitting) {
+      return;
+    }
+
+    setQuestionStates((previousStates) => ({
+      ...previousStates,
+      [currentQuestion.questionId]: {
+        ...previousStates[currentQuestion.questionId],
+        selectedAnswer: value,
+      },
+    }));
+
+    if (draft) {
+      return;
+    }
+
+    const answerText = value.trim();
+    if (!answerText) {
+      return;
+    }
+
+    setSubmitting(true);
+    setError('');
+
+    try {
+      const result = await submitQuizAnswer({
+        questionId: currentQuestion.questionId,
+        selectedAnswer: answerText,
+        wrongAnswerReview: quizType === 'review',
+      });
+
+      const answer = {
+        vocabularyId: currentQuestion.vocabularyId,
+        selectedOptionId: null,
+        selectedText: answerText,
+        correct: result.correct,
+        correctAnswer: result.correctAnswer,
+      };
+
+      setQuestionStates((previousStates) => ({
+        ...previousStates,
+        [currentQuestion.questionId]: {
+          ...previousStates[currentQuestion.questionId],
+          selectedAnswer: answerText,
+          feedback: answer,
+          answer,
+        },
+      }));
+    } catch (submitError) {
+      setError(normalizeError(submitError.message));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function handleMarkMastered() {
     if (!currentQuestion || submitting) {
       return;
@@ -480,12 +536,15 @@ function App() {
           currentIndex={currentIndex}
           totalCount={questions.length}
           progress={progress}
+          isWrittenAnswer={currentQuestion.options.length === 0}
           selectedOptionId={selectedOptionId}
+          selectedAnswer={currentQuestionState.selectedAnswer || ''}
           feedback={feedback}
           isMastered={isCurrentQuestionMastered}
           submitting={submitting}
           error={error}
           onSelectOption={handleSelectOption}
+          onSubmitWrittenAnswer={handleWrittenAnswer}
           onMarkMastered={handleMarkMastered}
           onPrevious={handlePrevious}
           onNext={handleNext}
@@ -523,6 +582,14 @@ function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongA
     });
   }
 
+  function updateCategory(value) {
+    onChange({
+      ...settings,
+      category: value,
+      mode: value === 'LOANWORD' ? 'MEANING_TO_WORD' : settings.mode,
+    });
+  }
+
   function updateQuestionCountOption(value) {
     if (value === 'custom') {
       updateField('questionCount', questionCountPresets.includes(questionCountValue) ? '' : settings.questionCount);
@@ -556,7 +623,7 @@ function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongA
                   name="category"
                   type="radio"
                   value={category.value}
-                  onChange={(event) => updateField('category', event.target.value)}
+                  onChange={(event) => updateCategory(event.target.value)}
                 />
                 <span>
                   <strong>{category.label}</strong>
@@ -573,21 +640,26 @@ function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongA
             <small>문제를 읽는 방향을 선택하세요.</small>
           </legend>
           <div className="mode-group">
-            {quizModes.map((mode) => (
-              <label className="choice" key={mode.value}>
-                <input
-                  checked={settings.mode === mode.value}
-                  name="mode"
-                  type="radio"
-                  value={mode.value}
-                  onChange={(event) => updateField('mode', event.target.value)}
-                />
-                <span>
-                  <strong>{mode.shortLabel}</strong>
-                  <small>{mode.label}</small>
-                </span>
-              </label>
-            ))}
+            {quizModes.map((mode) => {
+              const isUnavailableForLoanword = settings.category === 'LOANWORD' && mode.value !== 'MEANING_TO_WORD';
+
+              return (
+                <label className={isUnavailableForLoanword ? 'choice disabled-choice' : 'choice'} key={mode.value}>
+                  <input
+                    checked={settings.mode === mode.value}
+                    disabled={isUnavailableForLoanword}
+                    name="mode"
+                    type="radio"
+                    value={mode.value}
+                    onChange={(event) => updateField('mode', event.target.value)}
+                  />
+                  <span>
+                    <strong>{mode.shortLabel}</strong>
+                    <small>{mode.label}</small>
+                  </span>
+                </label>
+              );
+            })}
           </div>
         </fieldset>
 
@@ -1434,12 +1506,15 @@ function QuizScreen({
   currentIndex,
   totalCount,
   progress,
+  isWrittenAnswer,
   selectedOptionId,
+  selectedAnswer,
   feedback,
   isMastered,
   submitting,
   error,
   onSelectOption,
+  onSubmitWrittenAnswer,
   onMarkMastered,
   onPrevious,
   onNext,
@@ -1473,7 +1548,25 @@ function QuizScreen({
         {question.questionText}
       </h1>
 
-      <div className="options" role="list">
+      {isWrittenAnswer ? (
+        <form className="written-answer-form" onSubmit={(event) => {
+          event.preventDefault();
+          onSubmitWrittenAnswer(selectedAnswer);
+        }}>
+          <label className="written-answer-label" htmlFor="written-answer">정답 단어 입력</label>
+          <input
+            id="written-answer"
+            autoComplete="off"
+            disabled={Boolean(feedback) || submitting}
+            value={selectedAnswer}
+            onChange={(event) => onSubmitWrittenAnswer(event.target.value, true)}
+          />
+          <button className="primary-button" disabled={!selectedAnswer.trim() || Boolean(feedback) || submitting} type="submit">
+            정답 제출
+          </button>
+        </form>
+      ) : (
+        <div className="options" role="list">
         {question.options.map((option, optionIndex) => (
           <button
             className={optionClassName(option, selectedOptionId, feedback)}
@@ -1488,7 +1581,8 @@ function QuizScreen({
             <span>{option.text}</span>
           </button>
         ))}
-      </div>
+        </div>
+      )}
 
       <button
         className={isMastered ? 'mastered-button selected' : 'mastered-button'}
@@ -1748,6 +1842,15 @@ function normalizeError(message) {
     return maximumMatch
       ? `문제 수가 출제 가능한 어휘 수보다 많습니다. 최대 출제 가능 문제 수: ${maximumMatch[1]}개입니다.`
       : '문제 수가 출제 가능한 어휘 수보다 많습니다.';
+  }
+  if (message.includes('LOANWORD quizzes only support')) {
+    return '외래어 퀴즈는 뜻을 보고 단어를 고르는 방식만 사용할 수 있습니다.';
+  }
+  if (message.includes('Text answers are only supported')) {
+    return '입력 답안은 외래어 퀴즈에서만 사용할 수 있습니다.';
+  }
+  if (message.includes('Submit either selectedAnswer')) {
+    return '답안은 입력하거나 선택지 중 하나만 제출해 주세요.';
   }
   if (message.includes('Only jpg')) {
     return '지원하지 않는 파일 형식입니다. jpg, jpeg, png, webp 이미지만 업로드해 주세요.';

@@ -431,6 +431,19 @@ Submit answer response example:
 }
 ```
 
+외래어(`LOANWORD`) 퀴즈는 4지선다 선택지를 제공하지 않고, 뜻을 보고 단어를 직접 입력하는 주관식으로 출제됩니다.
+생성 응답의 `options`는 비어 있으며 정답은 응답에 포함되지 않습니다. 제출할 때는 서버가 발급한 `questionId`와 입력한 `selectedAnswer`를 전달합니다.
+
+```bash
+curl -X POST http://localhost:8080/api/quizzes/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "questionId": "b2e4c407-67e0-4203-bb01-1306a5a790d1",
+    "selectedAnswer": "카메라",
+    "wrongAnswerReview": false
+  }'
+```
+
 Mark a question as mastered:
 
 ```bash
@@ -482,6 +495,8 @@ Quiz error cases:
 - 숙지 처리된 어휘를 제외한 전체 출제 가능 어휘 수보다 `questionCount`가 크면 생성할 수 없습니다.
 - 미출제 어휘를 먼저 선택하고, 요청한 문제 수가 미출제 어휘 수보다 많으면 풀이 횟수가 적은 어휘 그룹부터 부족한 수만큼 보충합니다. 같은 풀이 횟수 그룹 안에서는 무작위로 선택합니다.
 - 같은 category 안에 선택지로 사용할 서로 다른 text가 4개 미만이면 생성할 수 없습니다.
+- `LOANWORD` 외래어 퀴즈는 `MEANING_TO_WORD`(뜻 → 단어) 모드만 사용할 수 있습니다.
+- `LOANWORD` 외래어 퀴즈는 선택지 없이 단어 입력으로만 답안을 제출합니다. 서버는 해당 문제 세션의 정답과 입력값을 비교합니다.
 - 존재하지 않는 category 또는 mode는 400 응답으로 처리됩니다.
 - 생성되지 않았거나 만료된 `questionId`로 제출하면 400 응답으로 처리됩니다.
 - 해당 문제의 options에 없는 `selectedOptionId`로 제출하면 400 응답으로 처리됩니다.
