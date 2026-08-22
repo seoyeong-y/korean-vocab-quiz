@@ -19,6 +19,7 @@ korean-vocab-quiz/
   backend/              # Spring Boot application
   frontend/             # React + Vite application
   docker-compose.yml    # frontend, backend, mysql local environment
+  docker-compose.prod.yml # EC2 production environment
   .env.example          # environment variable template
   .gitignore
   README.md
@@ -56,6 +57,7 @@ SPRING_DATASOURCE_USERNAME
 SPRING_DATASOURCE_PASSWORD
 APP_CORS_ALLOWED_ORIGIN
 VITE_API_BASE_URL
+HTTP_PORT
 ```
 
 Optional AI extraction variables:
@@ -63,10 +65,13 @@ Optional AI extraction variables:
 ```text
 GEMINI_API_KEY
 GEMINI_MODEL
+ADMIN_PASSWORD
 ```
 
 `GEMINI_API_KEY`는 이미지 기반 어휘 추출 기능에서만 백엔드가 사용합니다.
 프론트엔드로 전달하거나 Git에 커밋하지 마세요.
+
+`ADMIN_PASSWORD`는 어휘 생성·수정·삭제, CSV 등록, Gemini 이미지 추출, 검수 데이터 저장을 보호하는 관리자 비밀번호입니다. 실제 값은 서버의 `.env`에만 설정하고 Git에 커밋하지 마세요.
 
 ## Run With Docker Compose
 
@@ -81,6 +86,52 @@ This starts:
 - `mysql`
 
 MySQL data is stored in the named Docker volume `mysql-data`, so database data remains after container restart.
+
+## AWS EC2 Production Preparation
+
+실제 AWS 리소스를 생성하지 않고 production 컨테이너 구성을 검증하려면 `docker-compose.prod.yml`을 사용합니다.
+Production에서는 frontend Nginx만 호스트 포트를 사용하며, `/api/*` 요청은 Docker 내부의 `backend:8080`으로 reverse proxy됩니다. backend와 MySQL의 포트는 호스트에 publish하지 않습니다.
+
+EC2 서버에서 저장소를 받은 뒤 production용 `.env`를 직접 생성합니다. 실제 비밀번호와 Gemini API key는 파일이나 Git에 기록하지 마세요.
+
+```bash
+cp .env.example .env
+```
+
+Production `.env`는 다음처럼 서버 환경에 맞춰 수정합니다.
+
+```dotenv
+MYSQL_DATABASE=korean_vocab_quiz
+MYSQL_USER=korean_vocab_user
+MYSQL_PASSWORD=<strong-database-password>
+MYSQL_ROOT_PASSWORD=<strong-root-password>
+SPRING_PROFILES_ACTIVE=docker
+SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/korean_vocab_quiz?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+SPRING_DATASOURCE_USERNAME=korean_vocab_user
+SPRING_DATASOURCE_PASSWORD=<strong-database-password>
+APP_CORS_ALLOWED_ORIGIN=http://<domain-or-ec2-address>
+GEMINI_API_KEY=<gemini-api-key>
+GEMINI_MODEL=gemini-2.5-flash
+ADMIN_PASSWORD=<strong-admin-password>
+HTTP_PORT=80
+```
+
+`VITE_API_BASE_URL`은 production에서 설정하지 않습니다. frontend가 상대 경로 `/api`를 사용하고 Nginx가 backend로 전달합니다.
+
+Production 실행과 상태 확인:
+
+```bash
+docker compose -f docker-compose.prod.yml config
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f backend
+```
+
+브라우저에서는 `http://<domain-or-ec2-address>`로 접속합니다. 현재 production Compose도 기존 로컬 Compose와 동일한 `mysql-data` Docker volume을 사용하므로, 이 저장소에서 두 Compose를 전환해 실행할 때 같은 MySQL 데이터를 조회합니다. 데이터 손실을 막으려면 EC2 운영 전에 volume 백업 절차를 별도로 마련해야 합니다.
+
+EC2 Security Group은 기본적으로 `22`(관리자 SSH), `80`(HTTP), `443`(HTTPS)만 허용하고 `3306`, `5173`, `8080`은 열지 않습니다. HTTPS가 필요하면 별도의 TLS 인증서와 reverse proxy 구성을 추가해야 합니다.
+
+관리자 변경 API는 `ADMIN_PASSWORD` 기반 세션 인증으로 보호됩니다. 공개 배포에서는 반드시 강한 비밀번호와 HTTPS를 사용하세요. 인증은 서버 메모리 세션이므로 backend를 여러 대로 확장할 때는 별도 세션 저장소나 인증 체계를 검토해야 합니다.
 
 ## Stop
 
@@ -330,7 +381,7 @@ Failure cases shown to users:
 - 저장 validation 실패
 
 This feature can incur Gemini API costs when images are analyzed.
-Local MVP에서는 관리자 기능 보호가 없으므로, 공개 배포 전 인증/인가나 네트워크 접근 제한으로 관리자 화면과 API를 보호해야 합니다.
+관리자 페이지 진입 시 비밀번호를 입력해야 하며, 인증된 세션에서만 관리자 변경 API를 사용할 수 있습니다. 일반 퀴즈, 오답노트, 학습 통계 API는 공개 접근을 유지합니다.
 
 ## Quiz API
 
