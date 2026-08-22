@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 import com.koreanvocabquiz.common.ResourceNotFoundException;
 import com.koreanvocabquiz.learning.VocabularyLearningProgress;
 import com.koreanvocabquiz.learning.VocabularyLearningProgressRepository;
+import com.koreanvocabquiz.learning.VocabularyLearningProgressService;
 import com.koreanvocabquiz.vocabulary.Vocabulary;
 import com.koreanvocabquiz.vocabulary.VocabularyRepository;
 import com.koreanvocabquiz.wronganswer.WrongAnswerService;
@@ -31,19 +32,22 @@ public class QuizService {
     private final QuizQuestionSessionStore sessionStore;
     private final MasteredVocabularyRepository masteredVocabularyRepository;
     private final VocabularyLearningProgressRepository learningProgressRepository;
+    private final VocabularyLearningProgressService learningProgressService;
 
     public QuizService(
             VocabularyRepository vocabularyRepository,
             WrongAnswerService wrongAnswerService,
             QuizQuestionSessionStore sessionStore,
             MasteredVocabularyRepository masteredVocabularyRepository,
-            VocabularyLearningProgressRepository learningProgressRepository
+            VocabularyLearningProgressRepository learningProgressRepository,
+            VocabularyLearningProgressService learningProgressService
     ) {
         this.vocabularyRepository = vocabularyRepository;
         this.wrongAnswerService = wrongAnswerService;
         this.sessionStore = sessionStore;
         this.masteredVocabularyRepository = masteredVocabularyRepository;
         this.learningProgressRepository = learningProgressRepository;
+        this.learningProgressService = learningProgressService;
     }
 
     public List<QuizQuestionResponse> create(QuizCreateRequest request) {
@@ -140,6 +144,9 @@ public class QuizService {
             wrongAnswerService.handleReviewSubmission(correctVocabulary, session.mode(), correct);
         } else if (!correct) {
             wrongAnswerService.recordWrongAnswer(correctVocabulary, session.mode());
+        }
+        if (!request.wrongAnswerReview()) {
+            learningProgressService.recordAttempt(correctVocabulary, correct);
         }
         sessionStore.recordSubmissionResult(new QuizQuestionSubmissionResult(
                 session.questionId(),

@@ -8,15 +8,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.koreanvocabquiz.learning.VocabularyLearningProgress;
 import com.koreanvocabquiz.learning.VocabularyLearningProgressRepository;
 import com.koreanvocabquiz.learning.VocabularyLearningProgressResponse;
 import com.koreanvocabquiz.quiz.QuizMode;
 import com.koreanvocabquiz.quiz.QuizQuestionSessionStore;
 import com.koreanvocabquiz.quiz.QuizQuestionSubmissionResult;
-import com.koreanvocabquiz.vocabulary.Vocabulary;
 import com.koreanvocabquiz.vocabulary.VocabularyCategory;
-import com.koreanvocabquiz.vocabulary.VocabularyRepository;
 import com.koreanvocabquiz.wronganswer.WrongAnswerRepository;
 
 import org.springframework.stereotype.Service;
@@ -43,20 +40,17 @@ public class StatisticsService {
     private final QuizHistoryRepository quizHistoryRepository;
     private final QuizQuestionSessionStore sessionStore;
     private final WrongAnswerRepository wrongAnswerRepository;
-    private final VocabularyRepository vocabularyRepository;
     private final VocabularyLearningProgressRepository learningProgressRepository;
 
     public StatisticsService(
             QuizHistoryRepository quizHistoryRepository,
             QuizQuestionSessionStore sessionStore,
             WrongAnswerRepository wrongAnswerRepository,
-            VocabularyRepository vocabularyRepository,
             VocabularyLearningProgressRepository learningProgressRepository
     ) {
         this.quizHistoryRepository = quizHistoryRepository;
         this.sessionStore = sessionStore;
         this.wrongAnswerRepository = wrongAnswerRepository;
-        this.vocabularyRepository = vocabularyRepository;
         this.learningProgressRepository = learningProgressRepository;
     }
 
@@ -97,7 +91,6 @@ public class StatisticsService {
                 correctCount,
                 totalCount - correctCount
         );
-        recordVocabularyProgress(results);
 
         return QuizHistoryResponse.from(quizHistoryRepository.save(history));
     }
@@ -127,23 +120,6 @@ public class StatisticsService {
                         .map(VocabularyLearningProgressResponse::from)
                         .toList()
         );
-    }
-
-    private void recordVocabularyProgress(List<QuizQuestionSubmissionResult> results) {
-        Map<Long, Boolean> correctByVocabularyId = results.stream()
-                .collect(Collectors.toMap(
-                        QuizQuestionSubmissionResult::vocabularyId,
-                        QuizQuestionSubmissionResult::correct,
-                        (previous, next) -> next
-                ));
-
-        List<Vocabulary> vocabularies = vocabularyRepository.findAllById(correctByVocabularyId.keySet());
-        for (Vocabulary vocabulary : vocabularies) {
-            VocabularyLearningProgress progress = learningProgressRepository.findByVocabulary(vocabulary)
-                    .orElseGet(() -> new VocabularyLearningProgress(vocabulary));
-            progress.recordAttempt(correctByVocabularyId.get(vocabulary.getId()));
-            learningProgressRepository.save(progress);
-        }
     }
 
     private LearningCountSummary summarize(List<QuizHistory> histories) {

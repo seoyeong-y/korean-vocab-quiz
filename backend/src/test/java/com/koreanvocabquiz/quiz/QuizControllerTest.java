@@ -185,6 +185,48 @@ class QuizControllerTest {
     }
 
     @Test
+    void submitGeneralQuizAnswerRecordsVocabularyProgressImmediately() throws Exception {
+        TestSession session = saveSession(apple, apple, QuizMode.WORD_TO_MEANING);
+
+        mockMvc.perform(post("/api/quizzes/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s",
+                                  "selectedOptionId": "%s",
+                                  "wrongAnswerReview": false
+                                }
+                                """.formatted(session.questionId(), session.selectedOptionId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.correct").value(true));
+
+        VocabularyLearningProgress progress = learningProgressRepository.findByVocabulary(apple).orElseThrow();
+        assertEquals(1, progress.getAttemptCount());
+        assertEquals(1, progress.getCorrectCount());
+        assertEquals(0, progress.getIncorrectCount());
+    }
+
+    @Test
+    void submitWrongAnswerReviewDoesNotRecordVocabularyProgress() throws Exception {
+        wrongAnswerRepository.save(new WrongAnswer(apple, QuizMode.WORD_TO_MEANING));
+        TestSession session = saveSession(apple, banana, QuizMode.WORD_TO_MEANING);
+
+        mockMvc.perform(post("/api/quizzes/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s",
+                                  "selectedOptionId": "%s",
+                                  "wrongAnswerReview": true
+                                }
+                                """.formatted(session.questionId(), session.selectedOptionId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.correct").value(false));
+
+        assertEquals(0, learningProgressRepository.count());
+    }
+
+    @Test
     void submitWrongAnswer() throws Exception {
         TestSession session = saveSession(apple, banana, QuizMode.MEANING_TO_WORD);
 

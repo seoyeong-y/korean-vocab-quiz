@@ -81,6 +81,28 @@ function App() {
   const incorrectCount = answers.length - correctCount;
   const accuracy = answers.length ? Math.round((correctCount / answers.length) * 100) : 0;
 
+  async function saveAnsweredGeneralQuiz() {
+    if (quizType !== 'general' || quizHistorySaved) {
+      return;
+    }
+
+    const answeredQuestionIds = questions
+      .filter((question) => questionStates[question.questionId]?.answer)
+      .map((question) => question.questionId);
+
+    if (answeredQuestionIds.length === 0) {
+      return;
+    }
+
+    await completeQuiz({
+      category: settings.category,
+      mode: settings.mode,
+      questionIds: answeredQuestionIds,
+      wrongAnswerReview: false,
+    });
+    setQuizHistorySaved(true);
+  }
+
   async function handleStart(event) {
     event.preventDefault();
     setLoading(true);
@@ -305,6 +327,7 @@ function App() {
 
       const result = await markQuizQuestionMastered({
         questionId: currentQuestion.questionId,
+        wrongAnswerReview: quizType === 'review',
       });
 
       const masteredAnswer = {
@@ -345,13 +368,7 @@ function App() {
         setError('');
 
         try {
-          await completeQuiz({
-            category: settings.category,
-            mode: settings.mode,
-            questionIds: questions.map((question) => question.questionId),
-            wrongAnswerReview: false,
-          });
-          setQuizHistorySaved(true);
+          await saveAnsweredGeneralQuiz();
         } catch (completionError) {
           setError(normalizeError(completionError.message));
           setSubmitting(false);
@@ -367,6 +384,29 @@ function App() {
     setCurrentIndex((index) => index + 1);
     setQuizHistorySaved(false);
     setError('');
+  }
+
+  async function handleFinishEarly() {
+    if (answers.length === 0 || submitting) {
+      return;
+    }
+
+    if (quizType === 'general' && !quizHistorySaved) {
+      setSubmitting(true);
+      setError('');
+
+      try {
+        await saveAnsweredGeneralQuiz();
+      } catch (completionError) {
+        setError(normalizeError(completionError.message));
+        setSubmitting(false);
+        return;
+      }
+
+      setSubmitting(false);
+    }
+
+    setScreen('result');
   }
 
   function handlePrevious() {
@@ -449,12 +489,14 @@ function App() {
           onMarkMastered={handleMarkMastered}
           onPrevious={handlePrevious}
           onNext={handleNext}
+          onFinishEarly={handleFinishEarly}
+          answeredCount={answers.length}
         />
       )}
 
       {screen === 'result' && (
         <ResultScreen
-          totalCount={questions.length}
+          totalCount={answers.length}
           correctCount={correctCount}
           incorrectCount={incorrectCount}
           accuracy={accuracy}
@@ -1353,6 +1395,8 @@ function QuizScreen({
   onMarkMastered,
   onPrevious,
   onNext,
+  onFinishEarly,
+  answeredCount,
 }) {
   return (
     <section className="panel quiz-panel" aria-labelledby="quiz-title">
@@ -1412,6 +1456,15 @@ function QuizScreen({
           <span>다시 누르면 숙지 처리를 취소할 수 있습니다.</span>
         </div>
       )}
+
+      <button
+        className="secondary-button finish-early-button"
+        disabled={answeredCount === 0 || submitting}
+        type="button"
+        onClick={onFinishEarly}
+      >
+        여기까지 저장하고 결과 보기
+      </button>
 
       <div className="quiz-navigation" aria-label="문제 이동">
         <button
