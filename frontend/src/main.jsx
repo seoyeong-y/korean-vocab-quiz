@@ -680,9 +680,9 @@ function StartScreen({
   onOpenAdmin,
 }) {
   const questionCountValue = Number(settings.questionCount);
-  const selectedQuestionCountOption = questionCountPresets.includes(questionCountValue)
-    ? String(questionCountValue)
-    : 'custom';
+  const [selectedQuestionCountOption, setSelectedQuestionCountOption] = React.useState(() => (
+    questionCountPresets.includes(questionCountValue) ? String(questionCountValue) : 'custom'
+  ));
   const availabilityByCategory = Object.fromEntries(
     availability.map((item) => [item.category, item.availableCount])
   );
@@ -703,6 +703,7 @@ function StartScreen({
   }
 
   function updateQuestionCountOption(value) {
+    setSelectedQuestionCountOption(value);
     if (value === 'custom') {
       updateField('questionCount', questionCountPresets.includes(questionCountValue) ? '' : settings.questionCount);
       return;
@@ -830,7 +831,7 @@ function StartScreen({
 
           <div className="custom-count-row">
             <label className="field-label" htmlFor="question-count">
-              <span>직접 입력 문제 수</span>
+              <span>직접 입력</span>
               <input
                 disabled={selectedQuestionCountOption !== 'custom'}
                 id="question-count"
