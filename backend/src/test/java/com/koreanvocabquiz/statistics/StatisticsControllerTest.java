@@ -110,7 +110,11 @@ class StatisticsControllerTest {
                 .andExpect(jsonPath("$.modes[0].mode").value("WORD_TO_MEANING"))
                 .andExpect(jsonPath("$.modes[0].totalQuestionCount").value(2))
                 .andExpect(jsonPath("$.recentHistories", hasSize(1)))
-                .andExpect(jsonPath("$.vocabularyProgresses", hasSize(2)));
+                .andExpect(jsonPath("$.vocabularyProgresses", hasSize(2)))
+                .andExpect(jsonPath("$.totalVocabularyCount").value(4))
+                .andExpect(jsonPath("$.attemptedVocabularyCount").value(2))
+                .andExpect(jsonPath("$.vocabularyCounts[0].totalCount").value(3))
+                .andExpect(jsonPath("$.vocabularyCounts[0].attemptedCount").value(2));
     }
 
     @Test
@@ -155,7 +159,11 @@ class StatisticsControllerTest {
                 .andExpect(jsonPath("$.modes", hasSize(3)))
                 .andExpect(jsonPath("$.recentHistories", hasSize(0)))
                 .andExpect(jsonPath("$.mostWrongVocabularies", hasSize(0)))
-                .andExpect(jsonPath("$.vocabularyProgresses", hasSize(0)));
+                .andExpect(jsonPath("$.vocabularyProgresses", hasSize(0)))
+                .andExpect(jsonPath("$.totalVocabularyCount").value(4))
+                .andExpect(jsonPath("$.attemptedVocabularyCount").value(0))
+                .andExpect(jsonPath("$.vocabularyCounts[0].totalCount").value(3))
+                .andExpect(jsonPath("$.vocabularyCounts[0].attemptedCount").value(0));
     }
 
     @Test

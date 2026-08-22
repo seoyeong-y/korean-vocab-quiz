@@ -14,6 +14,7 @@ import com.koreanvocabquiz.quiz.QuizMode;
 import com.koreanvocabquiz.quiz.QuizQuestionSessionStore;
 import com.koreanvocabquiz.quiz.QuizQuestionSubmissionResult;
 import com.koreanvocabquiz.vocabulary.VocabularyCategory;
+import com.koreanvocabquiz.vocabulary.VocabularyRepository;
 import com.koreanvocabquiz.wronganswer.WrongAnswerRepository;
 
 import org.springframework.stereotype.Service;
@@ -41,17 +42,20 @@ public class StatisticsService {
     private final QuizQuestionSessionStore sessionStore;
     private final WrongAnswerRepository wrongAnswerRepository;
     private final VocabularyLearningProgressRepository learningProgressRepository;
+    private final VocabularyRepository vocabularyRepository;
 
     public StatisticsService(
             QuizHistoryRepository quizHistoryRepository,
             QuizQuestionSessionStore sessionStore,
             WrongAnswerRepository wrongAnswerRepository,
-            VocabularyLearningProgressRepository learningProgressRepository
+            VocabularyLearningProgressRepository learningProgressRepository,
+            VocabularyRepository vocabularyRepository
     ) {
         this.quizHistoryRepository = quizHistoryRepository;
         this.sessionStore = sessionStore;
         this.wrongAnswerRepository = wrongAnswerRepository;
         this.learningProgressRepository = learningProgressRepository;
+        this.vocabularyRepository = vocabularyRepository;
     }
 
     @Transactional
@@ -118,8 +122,21 @@ public class StatisticsService {
                 learningProgressRepository.findTop20ByOrderByLastAttemptedAtDesc()
                         .stream()
                         .map(VocabularyLearningProgressResponse::from)
-                        .toList()
+                        .toList(),
+                vocabularyRepository.count(),
+                learningProgressRepository.count(),
+                vocabularyCounts()
         );
+    }
+
+    private List<VocabularyCountStat> vocabularyCounts() {
+        return DASHBOARD_CATEGORIES.stream()
+                .map(category -> new VocabularyCountStat(
+                        category,
+                        vocabularyRepository.countByCategory(category),
+                        learningProgressRepository.countByVocabularyCategory(category)
+                ))
+                .toList();
     }
 
     private LearningCountSummary summarize(List<QuizHistory> histories) {

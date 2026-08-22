@@ -11,6 +11,9 @@ public record StatisticsDashboardResponse(
         List<ModeLearningStat> modes,
         List<QuizHistoryResponse> recentHistories,
         List<MostWrongVocabularyResponse> mostWrongVocabularies,
-        List<VocabularyLearningProgressResponse> vocabularyProgresses
+        List<VocabularyLearningProgressResponse> vocabularyProgresses,
+        long totalVocabularyCount,
+        long attemptedVocabularyCount,
+        List<VocabularyCountStat> vocabularyCounts
 ) {
 }

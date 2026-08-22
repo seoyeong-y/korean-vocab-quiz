@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.koreanvocabquiz.vocabulary.Vocabulary;
+import com.koreanvocabquiz.vocabulary.VocabularyCategory;
 
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,6 +15,8 @@ public interface VocabularyLearningProgressRepository extends JpaRepository<Voca
     Optional<VocabularyLearningProgress> findByVocabulary(Vocabulary vocabulary);
 
     List<VocabularyLearningProgress> findByVocabularyIdIn(Collection<Long> vocabularyIds);
+
+    long countByVocabularyCategory(VocabularyCategory category);
 
     @EntityGraph(attributePaths = "vocabulary")
     List<VocabularyLearningProgress> findTop20ByOrderByLastAttemptedAtDesc();
