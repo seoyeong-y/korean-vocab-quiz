@@ -428,9 +428,15 @@ Submit answer response example:
 {
   "correct": true,
   "correctAnswer": "apple",
-  "vocabularyId": 1
+  "vocabularyId": 1,
+  "selectedAnswer": "apple",
+  "selectedVocabularyId": 1,
+  "selectedWord": "사과",
+  "selectedMeaning": "apple"
 }
 ```
+
+오답 제출 시 응답의 `selectedWord`와 `selectedMeaning`을 이용해 사용자가 선택한 답에 대응하는 어휘도 함께 확인할 수 있습니다.
 
 외래어(`LOANWORD`) 퀴즈는 4지선다 선택지를 제공하지 않고, 뜻을 보고 단어를 직접 입력하는 주관식으로 출제됩니다.
 생성 응답의 `options`는 비어 있으며 정답은 응답에 포함되지 않습니다. 제출할 때는 서버가 발급한 `questionId`와 입력한 `selectedAnswer`를 전달합니다.
