@@ -676,6 +676,9 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
   const recentHistories = dashboard?.recentHistories || [];
   const mostWrongVocabularies = dashboard?.mostWrongVocabularies || [];
   const vocabularyProgresses = dashboard?.vocabularyProgresses || [];
+  const totalVocabularyCount = dashboard?.totalVocabularyCount || 0;
+  const attemptedVocabularyCount = dashboard?.attemptedVocabularyCount || 0;
+  const vocabularyCounts = dashboard?.vocabularyCounts || [];
 
   return (
     <section className="panel my-page-panel" aria-labelledby="my-page-title">
@@ -715,6 +718,10 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
           <strong>{total.accuracy}%</strong>
         </section>
         <dl className="stat-card-grid">
+          <div>
+            <dt>풀어본 어휘</dt>
+            <dd>{attemptedVocabularyCount} / {totalVocabularyCount}</dd>
+          </div>
           <div>
             <dt>누적 풀이</dt>
             <dd>{total.totalQuestionCount}</dd>
@@ -772,6 +779,7 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
               correct={stat.correctCount}
               incorrect={stat.incorrectCount}
               accuracy={stat.accuracy}
+              vocabularyCount={vocabularyCounts.find((item) => item.category === stat.category)}
             />
           ))}
         </div>
@@ -921,11 +929,12 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
   );
 }
 
-function StatRow({ label, total, correct, incorrect, accuracy }) {
+function StatRow({ label, total, correct, incorrect, accuracy, vocabularyCount }) {
   return (
     <article className="stat-row">
       <strong>{label}</strong>
       <span>{total}문제</span>
+      {vocabularyCount && <span>어휘 {vocabularyCount.attemptedCount} / {vocabularyCount.totalCount}</span>}
       <span>정답 {correct}</span>
       <span>오답 {incorrect}</span>
       <em>{accuracy}%</em>
