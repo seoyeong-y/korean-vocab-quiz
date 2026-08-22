@@ -692,6 +692,11 @@ dd {
   color: #7a5a00;
 }
 
+.finish-early-button {
+  margin-top: var(--space-4);
+  width: 100%;
+}
+
 .quiz-navigation {
   display: grid;
   gap: var(--space-3);

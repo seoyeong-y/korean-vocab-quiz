@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.koreanvocabquiz.learning.VocabularyLearningProgressRepository;
+import com.koreanvocabquiz.learning.VocabularyLearningProgressResponse;
 import com.koreanvocabquiz.quiz.QuizMode;
 import com.koreanvocabquiz.quiz.QuizQuestionSessionStore;
 import com.koreanvocabquiz.quiz.QuizQuestionSubmissionResult;
@@ -38,15 +40,18 @@ public class StatisticsService {
     private final QuizHistoryRepository quizHistoryRepository;
     private final QuizQuestionSessionStore sessionStore;
     private final WrongAnswerRepository wrongAnswerRepository;
+    private final VocabularyLearningProgressRepository learningProgressRepository;
 
     public StatisticsService(
             QuizHistoryRepository quizHistoryRepository,
             QuizQuestionSessionStore sessionStore,
-            WrongAnswerRepository wrongAnswerRepository
+            WrongAnswerRepository wrongAnswerRepository,
+            VocabularyLearningProgressRepository learningProgressRepository
     ) {
         this.quizHistoryRepository = quizHistoryRepository;
         this.sessionStore = sessionStore;
         this.wrongAnswerRepository = wrongAnswerRepository;
+        this.learningProgressRepository = learningProgressRepository;
     }
 
     @Transactional
@@ -109,6 +114,10 @@ public class StatisticsService {
                 wrongAnswerRepository.findTop5ByOrderByWrongCountDescLastWrongAtDesc()
                         .stream()
                         .map(MostWrongVocabularyResponse::from)
+                        .toList(),
+                learningProgressRepository.findTop20ByOrderByLastAttemptedAtDesc()
+                        .stream()
+                        .map(VocabularyLearningProgressResponse::from)
                         .toList()
         );
     }

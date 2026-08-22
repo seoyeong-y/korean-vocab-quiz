@@ -19,6 +19,8 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.koreanvocabquiz.learning.VocabularyLearningProgress;
+import com.koreanvocabquiz.learning.VocabularyLearningProgressRepository;
 import com.koreanvocabquiz.wronganswer.WrongAnswer;
 import com.koreanvocabquiz.wronganswer.WrongAnswerRepository;
 import com.koreanvocabquiz.vocabulary.Vocabulary;
@@ -59,6 +61,9 @@ class QuizControllerTest {
     private QuizQuestionSessionStore sessionStore;
 
     @Autowired
+    private VocabularyLearningProgressRepository learningProgressRepository;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     private Vocabulary apple;
@@ -68,6 +73,7 @@ class QuizControllerTest {
     void setUp() {
         masteredVocabularyRepository.deleteAll();
         wrongAnswerRepository.deleteAll();
+        learningProgressRepository.deleteAll();
         vocabularyRepository.deleteAll();
 
         apple = vocabularyRepository.save(new Vocabulary("사과", "apple", VocabularyCategory.NOUN, null));
@@ -179,6 +185,48 @@ class QuizControllerTest {
     }
 
     @Test
+    void submitGeneralQuizAnswerRecordsVocabularyProgressImmediately() throws Exception {
+        TestSession session = saveSession(apple, apple, QuizMode.WORD_TO_MEANING);
+
+        mockMvc.perform(post("/api/quizzes/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s",
+                                  "selectedOptionId": "%s",
+                                  "wrongAnswerReview": false
+                                }
+                                """.formatted(session.questionId(), session.selectedOptionId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.correct").value(true));
+
+        VocabularyLearningProgress progress = learningProgressRepository.findByVocabulary(apple).orElseThrow();
+        assertEquals(1, progress.getAttemptCount());
+        assertEquals(1, progress.getCorrectCount());
+        assertEquals(0, progress.getIncorrectCount());
+    }
+
+    @Test
+    void submitWrongAnswerReviewDoesNotRecordVocabularyProgress() throws Exception {
+        wrongAnswerRepository.save(new WrongAnswer(apple, QuizMode.WORD_TO_MEANING));
+        TestSession session = saveSession(apple, banana, QuizMode.WORD_TO_MEANING);
+
+        mockMvc.perform(post("/api/quizzes/submit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "questionId": "%s",
+                                  "selectedOptionId": "%s",
+                                  "wrongAnswerReview": true
+                                }
+                                """.formatted(session.questionId(), session.selectedOptionId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.correct").value(false));
+
+        assertEquals(0, learningProgressRepository.count());
+    }
+
+    @Test
     void submitWrongAnswer() throws Exception {
         TestSession session = saveSession(apple, banana, QuizMode.MEANING_TO_WORD);
 
@@ -267,6 +315,38 @@ class QuizControllerTest {
         });
         assertEquals(0, questions.stream()
                 .filter(nextQuestion -> nextQuestion.vocabularyId().equals(question.vocabularyId()))
+                .count());
+    }
+
+    @Test
+    void createQuizPrioritizesUnattemptedVocabularies() throws Exception {
+        Vocabulary appleProgressVocabulary = vocabularyRepository.findById(apple.getId()).orElseThrow();
+        Vocabulary bananaProgressVocabulary = vocabularyRepository.findById(banana.getId()).orElseThrow();
+        VocabularyLearningProgress appleProgress = new VocabularyLearningProgress(appleProgressVocabulary);
+        appleProgress.recordAttempt(true);
+        learningProgressRepository.save(appleProgress);
+        VocabularyLearningProgress bananaProgress = new VocabularyLearningProgress(bananaProgressVocabulary);
+        bananaProgress.recordAttempt(false);
+        learningProgressRepository.save(bananaProgress);
+
+        String content = mockMvc.perform(post("/api/quizzes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "NOUN",
+                                  "mode": "WORD_TO_MEANING",
+                                  "questionCount": 2
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        List<QuizQuestionResponse> questions = objectMapper.readValue(content, new TypeReference<>() {
+        });
+        assertEquals(0, questions.stream()
+                .filter(question -> question.vocabularyId().equals(apple.getId()) || question.vocabularyId().equals(banana.getId()))
                 .count());
     }
 

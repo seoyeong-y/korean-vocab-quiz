@@ -81,6 +81,28 @@ function App() {
   const incorrectCount = answers.length - correctCount;
   const accuracy = answers.length ? Math.round((correctCount / answers.length) * 100) : 0;
 
+  async function saveAnsweredGeneralQuiz() {
+    if (quizType !== 'general' || quizHistorySaved) {
+      return;
+    }
+
+    const answeredQuestionIds = questions
+      .filter((question) => questionStates[question.questionId]?.answer)
+      .map((question) => question.questionId);
+
+    if (answeredQuestionIds.length === 0) {
+      return;
+    }
+
+    await completeQuiz({
+      category: settings.category,
+      mode: settings.mode,
+      questionIds: answeredQuestionIds,
+      wrongAnswerReview: false,
+    });
+    setQuizHistorySaved(true);
+  }
+
   async function handleStart(event) {
     event.preventDefault();
     setLoading(true);
@@ -305,6 +327,7 @@ function App() {
 
       const result = await markQuizQuestionMastered({
         questionId: currentQuestion.questionId,
+        wrongAnswerReview: quizType === 'review',
       });
 
       const masteredAnswer = {
@@ -345,13 +368,7 @@ function App() {
         setError('');
 
         try {
-          await completeQuiz({
-            category: settings.category,
-            mode: settings.mode,
-            questionIds: questions.map((question) => question.questionId),
-            wrongAnswerReview: false,
-          });
-          setQuizHistorySaved(true);
+          await saveAnsweredGeneralQuiz();
         } catch (completionError) {
           setError(normalizeError(completionError.message));
           setSubmitting(false);
@@ -367,6 +384,29 @@ function App() {
     setCurrentIndex((index) => index + 1);
     setQuizHistorySaved(false);
     setError('');
+  }
+
+  async function handleFinishEarly() {
+    if (answers.length === 0 || submitting) {
+      return;
+    }
+
+    if (quizType === 'general' && !quizHistorySaved) {
+      setSubmitting(true);
+      setError('');
+
+      try {
+        await saveAnsweredGeneralQuiz();
+      } catch (completionError) {
+        setError(normalizeError(completionError.message));
+        setSubmitting(false);
+        return;
+      }
+
+      setSubmitting(false);
+    }
+
+    setScreen('result');
   }
 
   function handlePrevious() {
@@ -449,12 +489,14 @@ function App() {
           onMarkMastered={handleMarkMastered}
           onPrevious={handlePrevious}
           onNext={handleNext}
+          onFinishEarly={handleFinishEarly}
+          answeredCount={answers.length}
         />
       )}
 
       {screen === 'result' && (
         <ResultScreen
-          totalCount={questions.length}
+          totalCount={answers.length}
           correctCount={correctCount}
           incorrectCount={incorrectCount}
           accuracy={accuracy}
@@ -633,6 +675,7 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
   const modeStats = dashboard?.modes || [];
   const recentHistories = dashboard?.recentHistories || [];
   const mostWrongVocabularies = dashboard?.mostWrongVocabularies || [];
+  const vocabularyProgresses = dashboard?.vocabularyProgresses || [];
 
   return (
     <section className="panel my-page-panel" aria-labelledby="my-page-title">
@@ -819,6 +862,31 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
                 title={item.word}
                 description={item.meaning}
                 meta={`${modeLabel(item.quizMode)} · ${item.wrongCount}회 틀림`}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="dashboard-section" aria-labelledby="vocabulary-progress-title">
+        <div className="section-title-row">
+          <h2 id="vocabulary-progress-title">풀어본 어휘</h2>
+          <span>{vocabularyProgresses.length}개</span>
+        </div>
+        {vocabularyProgresses.length === 0 ? (
+          <div className="empty-state compact-empty-state">
+            <strong>아직 풀어본 어휘 기록이 없습니다.</strong>
+            <span>일반 퀴즈를 완료하면 단어별 풀이 횟수가 표시됩니다.</span>
+          </div>
+        ) : (
+          <div className="learning-word-list" role="list">
+            {vocabularyProgresses.map((item) => (
+              <LearningWordItem
+                key={item.vocabularyId}
+                category={item.category}
+                title={item.word}
+                description={item.meaning}
+                meta={`${item.attemptCount}회 풀이 · 정답 ${item.correctCount} · 오답 ${item.incorrectCount} · ${item.accuracy}%`}
               />
             ))}
           </div>
@@ -1327,6 +1395,8 @@ function QuizScreen({
   onMarkMastered,
   onPrevious,
   onNext,
+  onFinishEarly,
+  answeredCount,
 }) {
   return (
     <section className="panel quiz-panel" aria-labelledby="quiz-title">
@@ -1386,6 +1456,15 @@ function QuizScreen({
           <span>다시 누르면 숙지 처리를 취소할 수 있습니다.</span>
         </div>
       )}
+
+      <button
+        className="secondary-button finish-early-button"
+        disabled={answeredCount === 0 || submitting}
+        type="button"
+        onClick={onFinishEarly}
+      >
+        여기까지 저장하고 결과 보기
+      </button>
 
       <div className="quiz-navigation" aria-label="문제 이동">
         <button

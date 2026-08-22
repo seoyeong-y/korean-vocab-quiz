@@ -8,8 +8,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 import com.koreanvocabquiz.common.ResourceNotFoundException;
+import com.koreanvocabquiz.learning.VocabularyLearningProgress;
+import com.koreanvocabquiz.learning.VocabularyLearningProgressRepository;
+import com.koreanvocabquiz.learning.VocabularyLearningProgressService;
 import com.koreanvocabquiz.vocabulary.Vocabulary;
 import com.koreanvocabquiz.vocabulary.VocabularyRepository;
 import com.koreanvocabquiz.wronganswer.WrongAnswerService;
@@ -27,17 +31,23 @@ public class QuizService {
     private final WrongAnswerService wrongAnswerService;
     private final QuizQuestionSessionStore sessionStore;
     private final MasteredVocabularyRepository masteredVocabularyRepository;
+    private final VocabularyLearningProgressRepository learningProgressRepository;
+    private final VocabularyLearningProgressService learningProgressService;
 
     public QuizService(
             VocabularyRepository vocabularyRepository,
             WrongAnswerService wrongAnswerService,
             QuizQuestionSessionStore sessionStore,
-            MasteredVocabularyRepository masteredVocabularyRepository
+            MasteredVocabularyRepository masteredVocabularyRepository,
+            VocabularyLearningProgressRepository learningProgressRepository,
+            VocabularyLearningProgressService learningProgressService
     ) {
         this.vocabularyRepository = vocabularyRepository;
         this.wrongAnswerService = wrongAnswerService;
         this.sessionStore = sessionStore;
         this.masteredVocabularyRepository = masteredVocabularyRepository;
+        this.learningProgressRepository = learningProgressRepository;
+        this.learningProgressService = learningProgressService;
     }
 
     public List<QuizQuestionResponse> create(QuizCreateRequest request) {
@@ -46,12 +56,13 @@ public class QuizService {
         List<Vocabulary> quizVocabularies = vocabularies.stream()
                 .filter(vocabulary -> !masteredVocabularyIds.contains(vocabulary.getId()))
                 .toList();
+        List<Vocabulary> prioritizedVocabularies = prioritizeByAttemptCount(quizVocabularies);
 
-        return createFromVocabularies(quizVocabularies, request.mode(), request.questionCount());
+        return createFromVocabularies(prioritizedVocabularies, prioritizedVocabularies, request.mode(), request.questionCount(), false);
     }
 
     public List<QuizQuestionResponse> createFromVocabularies(List<Vocabulary> vocabularies, QuizMode mode, int questionCount) {
-        return createFromVocabularies(vocabularies, vocabularies, mode, questionCount);
+        return createFromVocabularies(vocabularies, vocabularies, mode, questionCount, true);
     }
 
     public List<QuizQuestionResponse> createFromVocabularies(
@@ -59,6 +70,16 @@ public class QuizService {
             List<Vocabulary> optionSourceVocabularies,
             QuizMode mode,
             int questionCount
+    ) {
+        return createFromVocabularies(questionVocabularies, optionSourceVocabularies, mode, questionCount, true);
+    }
+
+    private List<QuizQuestionResponse> createFromVocabularies(
+            List<Vocabulary> questionVocabularies,
+            List<Vocabulary> optionSourceVocabularies,
+            QuizMode mode,
+            int questionCount,
+            boolean shuffleQuestions
     ) {
         if (optionSourceVocabularies.size() < OPTION_COUNT) {
             throw new QuizGenerationException("At least 4 vocabularies are required in the category to create multiple-choice quizzes.");
@@ -68,11 +89,40 @@ public class QuizService {
         }
 
         List<Vocabulary> questions = new ArrayList<>(questionVocabularies);
-        Collections.shuffle(questions);
+        if (shuffleQuestions) {
+            Collections.shuffle(questions);
+        }
 
         return questions.stream()
                 .limit(questionCount)
                 .map(vocabulary -> createQuestion(vocabulary, optionSourceVocabularies, resolveMode(mode)))
+                .toList();
+    }
+
+    private List<Vocabulary> prioritizeByAttemptCount(List<Vocabulary> vocabularies) {
+        Map<Long, Integer> attemptCounts = learningProgressRepository.findByVocabularyIdIn(
+                        vocabularies.stream().map(Vocabulary::getId).toList()
+                )
+                .stream()
+                .collect(Collectors.toMap(
+                        progress -> progress.getVocabulary().getId(),
+                        VocabularyLearningProgress::getAttemptCount
+                ));
+
+        return vocabularies.stream()
+                .collect(Collectors.groupingBy(
+                        vocabulary -> attemptCounts.getOrDefault(vocabulary.getId(), 0),
+                        LinkedHashMap::new,
+                        Collectors.toCollection(ArrayList::new)
+                ))
+                .entrySet()
+                .stream()
+                .sorted(Map.Entry.comparingByKey())
+                .flatMap(entry -> {
+                    List<Vocabulary> group = entry.getValue();
+                    Collections.shuffle(group);
+                    return group.stream();
+                })
                 .toList();
     }
 
@@ -94,6 +144,9 @@ public class QuizService {
             wrongAnswerService.handleReviewSubmission(correctVocabulary, session.mode(), correct);
         } else if (!correct) {
             wrongAnswerService.recordWrongAnswer(correctVocabulary, session.mode());
+        }
+        if (!request.wrongAnswerReview()) {
+            learningProgressService.recordAttempt(correctVocabulary, correct);
         }
         sessionStore.recordSubmissionResult(new QuizQuestionSubmissionResult(
                 session.questionId(),
