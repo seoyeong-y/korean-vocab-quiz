@@ -833,17 +833,14 @@ function StartScreen({
             <label className="field-label" htmlFor="question-count">
               <span>직접 입력</span>
               <input
+                disabled={selectedQuestionCountOption !== 'custom'}
                 id="question-count"
                 min="1"
                 placeholder="예: 12"
                 required={selectedQuestionCountOption === 'custom'}
                 type="number"
-                value={settings.questionCount}
-                onFocus={() => setSelectedQuestionCountOption('custom')}
-                onChange={(event) => {
-                  setSelectedQuestionCountOption('custom');
-                  updateField('questionCount', event.target.value);
-                }}
+                value={selectedQuestionCountOption === 'custom' ? settings.questionCount : ''}
+                onChange={(event) => updateField('questionCount', event.target.value)}
               />
             </label>
             <span className="field-hint">선택한 카테고리의 어휘 수 안에서 출제됩니다.</span>
