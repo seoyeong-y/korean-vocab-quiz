@@ -15,6 +15,7 @@ import com.koreanvocabquiz.learning.VocabularyLearningProgress;
 import com.koreanvocabquiz.learning.VocabularyLearningProgressRepository;
 import com.koreanvocabquiz.learning.VocabularyLearningProgressService;
 import com.koreanvocabquiz.vocabulary.Vocabulary;
+import com.koreanvocabquiz.vocabulary.VocabularyCategory;
 import com.koreanvocabquiz.vocabulary.VocabularyRepository;
 import com.koreanvocabquiz.wronganswer.WrongAnswerService;
 
@@ -51,6 +52,7 @@ public class QuizService {
     }
 
     public List<QuizQuestionResponse> create(QuizCreateRequest request) {
+        validateMode(request);
         List<Vocabulary> vocabularies = vocabularyRepository.findByCategory(request.category());
         Set<Long> masteredVocabularyIds = masteredVocabularyRepository.findMasteredVocabularyIds();
         List<Vocabulary> quizVocabularies = vocabularies.stream()
@@ -59,6 +61,12 @@ public class QuizService {
         List<Vocabulary> prioritizedVocabularies = prioritizeByAttemptCount(quizVocabularies);
 
         return createFromVocabularies(prioritizedVocabularies, prioritizedVocabularies, request.mode(), request.questionCount(), false);
+    }
+
+    private void validateMode(QuizCreateRequest request) {
+        if (request.category() == VocabularyCategory.LOANWORD && request.mode() != QuizMode.MEANING_TO_WORD) {
+            throw new QuizGenerationException("LOANWORD quizzes only support MEANING_TO_WORD mode.");
+        }
     }
 
     public List<QuizQuestionResponse> createFromVocabularies(List<Vocabulary> vocabularies, QuizMode mode, int questionCount) {

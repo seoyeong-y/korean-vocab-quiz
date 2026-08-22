@@ -612,6 +612,21 @@ class QuizControllerTest {
     }
 
     @Test
+    void rejectUnsupportedModeForLoanwordQuiz() throws Exception {
+        mockMvc.perform(post("/api/quizzes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "LOANWORD",
+                                  "mode": "WORD_TO_MEANING",
+                                  "questionCount": 1
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.messages[0]").value("LOANWORD quizzes only support MEANING_TO_WORD mode."));
+    }
+
+    @Test
     void rejectQuestionCountGreaterThanVocabularyCount() throws Exception {
         mockMvc.perform(post("/api/quizzes")
                         .contentType(MediaType.APPLICATION_JSON)

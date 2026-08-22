@@ -523,6 +523,14 @@ function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongA
     });
   }
 
+  function updateCategory(value) {
+    onChange({
+      ...settings,
+      category: value,
+      mode: value === 'LOANWORD' ? 'MEANING_TO_WORD' : settings.mode,
+    });
+  }
+
   function updateQuestionCountOption(value) {
     if (value === 'custom') {
       updateField('questionCount', questionCountPresets.includes(questionCountValue) ? '' : settings.questionCount);
@@ -556,7 +564,7 @@ function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongA
                   name="category"
                   type="radio"
                   value={category.value}
-                  onChange={(event) => updateField('category', event.target.value)}
+                  onChange={(event) => updateCategory(event.target.value)}
                 />
                 <span>
                   <strong>{category.label}</strong>
@@ -573,21 +581,26 @@ function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongA
             <small>문제를 읽는 방향을 선택하세요.</small>
           </legend>
           <div className="mode-group">
-            {quizModes.map((mode) => (
-              <label className="choice" key={mode.value}>
-                <input
-                  checked={settings.mode === mode.value}
-                  name="mode"
-                  type="radio"
-                  value={mode.value}
-                  onChange={(event) => updateField('mode', event.target.value)}
-                />
-                <span>
-                  <strong>{mode.shortLabel}</strong>
-                  <small>{mode.label}</small>
-                </span>
-              </label>
-            ))}
+            {quizModes.map((mode) => {
+              const isUnavailableForLoanword = settings.category === 'LOANWORD' && mode.value !== 'MEANING_TO_WORD';
+
+              return (
+                <label className={isUnavailableForLoanword ? 'choice disabled-choice' : 'choice'} key={mode.value}>
+                  <input
+                    checked={settings.mode === mode.value}
+                    disabled={isUnavailableForLoanword}
+                    name="mode"
+                    type="radio"
+                    value={mode.value}
+                    onChange={(event) => updateField('mode', event.target.value)}
+                  />
+                  <span>
+                    <strong>{mode.shortLabel}</strong>
+                    <small>{mode.label}</small>
+                  </span>
+                </label>
+              );
+            })}
           </div>
         </fieldset>
 
@@ -1748,6 +1761,9 @@ function normalizeError(message) {
     return maximumMatch
       ? `문제 수가 출제 가능한 어휘 수보다 많습니다. 최대 출제 가능 문제 수: ${maximumMatch[1]}개입니다.`
       : '문제 수가 출제 가능한 어휘 수보다 많습니다.';
+  }
+  if (message.includes('LOANWORD quizzes only support')) {
+    return '외래어 퀴즈는 뜻을 보고 단어를 고르는 방식만 사용할 수 있습니다.';
   }
   if (message.includes('Only jpg')) {
     return '지원하지 않는 파일 형식입니다. jpg, jpeg, png, webp 이미지만 업로드해 주세요.';
