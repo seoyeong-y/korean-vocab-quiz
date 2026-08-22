@@ -85,7 +85,10 @@ public class QuizService {
             throw new QuizGenerationException("At least 4 vocabularies are required in the category to create multiple-choice quizzes.");
         }
         if (questionCount > questionVocabularies.size()) {
-            throw new QuizGenerationException("questionCount cannot be greater than the number of vocabularies available for this quiz.");
+            throw new QuizGenerationException(
+                    "questionCount cannot be greater than the number of eligible vocabularies available for this quiz. "
+                            + "Maximum question count: " + questionVocabularies.size() + "."
+            );
         }
 
         List<Vocabulary> questions = new ArrayList<>(questionVocabularies);

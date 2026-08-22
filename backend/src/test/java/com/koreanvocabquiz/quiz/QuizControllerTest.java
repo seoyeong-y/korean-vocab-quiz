@@ -351,6 +351,39 @@ class QuizControllerTest {
     }
 
     @Test
+    void createQuizFillsBeyondUnattemptedVocabulariesWithLeastAttempted() throws Exception {
+        Vocabulary appleProgressVocabulary = vocabularyRepository.findById(apple.getId()).orElseThrow();
+        Vocabulary bananaProgressVocabulary = vocabularyRepository.findById(banana.getId()).orElseThrow();
+        VocabularyLearningProgress appleProgress = new VocabularyLearningProgress(appleProgressVocabulary);
+        appleProgress.recordAttempt(true);
+        learningProgressRepository.save(appleProgress);
+        VocabularyLearningProgress bananaProgress = new VocabularyLearningProgress(bananaProgressVocabulary);
+        bananaProgress.recordAttempt(false);
+        learningProgressRepository.save(bananaProgress);
+
+        String content = mockMvc.perform(post("/api/quizzes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "NOUN",
+                                  "mode": "WORD_TO_MEANING",
+                                  "questionCount": 3
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        List<QuizQuestionResponse> questions = objectMapper.readValue(content, new TypeReference<>() {
+        });
+        assertEquals(3, questions.size());
+        assertEquals(1, questions.stream()
+                .filter(question -> question.vocabularyId().equals(apple.getId()) || question.vocabularyId().equals(banana.getId()))
+                .count());
+    }
+
+    @Test
     void removeWrongAnswerWhenMarkingVocabularyAsMastered() throws Exception {
         wrongAnswerRepository.save(new WrongAnswer(apple, QuizMode.WORD_TO_MEANING));
         TestSession session = saveSession(apple, apple, QuizMode.WORD_TO_MEANING);
@@ -587,10 +620,10 @@ class QuizControllerTest {
                                   "category": "NOUN",
                                   "mode": "WORD_TO_MEANING",
                                   "questionCount": 5
-                                }
+                }
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.messages[0]").value("questionCount cannot be greater than the number of vocabularies available for this quiz."));
+                .andExpect(jsonPath("$.messages[0]").value("questionCount cannot be greater than the number of eligible vocabularies available for this quiz. Maximum question count: 4."));
     }
 
     @Test
