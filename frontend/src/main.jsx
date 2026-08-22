@@ -269,6 +269,12 @@ function App() {
     }
   }
 
+  React.useEffect(() => {
+    if (restoredState.screen === 'myPage') {
+      loadMyPage();
+    }
+  }, []);
+
   async function handleSelectOption(option) {
     if (!currentQuestion || currentQuestionState.feedback || submitting) {
       return;
