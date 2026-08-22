@@ -293,6 +293,62 @@ function App() {
     }
   }
 
+  async function handleWrittenAnswer(value, draft = false) {
+    if (!currentQuestion || currentQuestionState.feedback || submitting) {
+      return;
+    }
+
+    setQuestionStates((previousStates) => ({
+      ...previousStates,
+      [currentQuestion.questionId]: {
+        ...previousStates[currentQuestion.questionId],
+        selectedAnswer: value,
+      },
+    }));
+
+    if (draft) {
+      return;
+    }
+
+    const answerText = value.trim();
+    if (!answerText) {
+      return;
+    }
+
+    setSubmitting(true);
+    setError('');
+
+    try {
+      const result = await submitQuizAnswer({
+        questionId: currentQuestion.questionId,
+        selectedAnswer: answerText,
+        wrongAnswerReview: quizType === 'review',
+      });
+
+      const answer = {
+        vocabularyId: currentQuestion.vocabularyId,
+        selectedOptionId: null,
+        selectedText: answerText,
+        correct: result.correct,
+        correctAnswer: result.correctAnswer,
+      };
+
+      setQuestionStates((previousStates) => ({
+        ...previousStates,
+        [currentQuestion.questionId]: {
+          ...previousStates[currentQuestion.questionId],
+          selectedAnswer: answerText,
+          feedback: answer,
+          answer,
+        },
+      }));
+    } catch (submitError) {
+      setError(normalizeError(submitError.message));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function handleMarkMastered() {
     if (!currentQuestion || submitting) {
       return;
@@ -480,12 +536,15 @@ function App() {
           currentIndex={currentIndex}
           totalCount={questions.length}
           progress={progress}
+          isWrittenAnswer={currentQuestion.options.length === 0}
           selectedOptionId={selectedOptionId}
+          selectedAnswer={currentQuestionState.selectedAnswer || ''}
           feedback={feedback}
           isMastered={isCurrentQuestionMastered}
           submitting={submitting}
           error={error}
           onSelectOption={handleSelectOption}
+          onSubmitWrittenAnswer={handleWrittenAnswer}
           onMarkMastered={handleMarkMastered}
           onPrevious={handlePrevious}
           onNext={handleNext}
@@ -1447,12 +1506,15 @@ function QuizScreen({
   currentIndex,
   totalCount,
   progress,
+  isWrittenAnswer,
   selectedOptionId,
+  selectedAnswer,
   feedback,
   isMastered,
   submitting,
   error,
   onSelectOption,
+  onSubmitWrittenAnswer,
   onMarkMastered,
   onPrevious,
   onNext,
@@ -1486,7 +1548,25 @@ function QuizScreen({
         {question.questionText}
       </h1>
 
-      <div className="options" role="list">
+      {isWrittenAnswer ? (
+        <form className="written-answer-form" onSubmit={(event) => {
+          event.preventDefault();
+          onSubmitWrittenAnswer(selectedAnswer);
+        }}>
+          <label className="written-answer-label" htmlFor="written-answer">정답 단어 입력</label>
+          <input
+            id="written-answer"
+            autoComplete="off"
+            disabled={Boolean(feedback) || submitting}
+            value={selectedAnswer}
+            onChange={(event) => onSubmitWrittenAnswer(event.target.value, true)}
+          />
+          <button className="primary-button" disabled={!selectedAnswer.trim() || Boolean(feedback) || submitting} type="submit">
+            정답 제출
+          </button>
+        </form>
+      ) : (
+        <div className="options" role="list">
         {question.options.map((option, optionIndex) => (
           <button
             className={optionClassName(option, selectedOptionId, feedback)}
@@ -1501,7 +1581,8 @@ function QuizScreen({
             <span>{option.text}</span>
           </button>
         ))}
-      </div>
+        </div>
+      )}
 
       <button
         className={isMastered ? 'mastered-button selected' : 'mastered-button'}
@@ -1764,6 +1845,12 @@ function normalizeError(message) {
   }
   if (message.includes('LOANWORD quizzes only support')) {
     return '외래어 퀴즈는 뜻을 보고 단어를 고르는 방식만 사용할 수 있습니다.';
+  }
+  if (message.includes('Text answers are only supported')) {
+    return '입력 답안은 외래어 퀴즈에서만 사용할 수 있습니다.';
+  }
+  if (message.includes('Submit either selectedAnswer')) {
+    return '답안은 입력하거나 선택지 중 하나만 제출해 주세요.';
   }
   if (message.includes('Only jpg')) {
     return '지원하지 않는 파일 형식입니다. jpg, jpeg, png, webp 이미지만 업로드해 주세요.';

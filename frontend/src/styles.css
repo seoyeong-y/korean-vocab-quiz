@@ -672,6 +672,31 @@ dd {
   justify-content: center;
 }
 
+.written-answer-form {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.written-answer-label {
+  color: var(--color-muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.written-answer-form input {
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-size: 18px;
+  min-height: 52px;
+  padding: 12px 14px;
+}
+
+.written-answer-form input:focus {
+  border-color: var(--color-primary);
+  outline: 3px solid var(--color-primary-soft);
+}
+
 .correct-option .option-marker {
   border-color: var(--color-success);
   color: var(--color-success);
