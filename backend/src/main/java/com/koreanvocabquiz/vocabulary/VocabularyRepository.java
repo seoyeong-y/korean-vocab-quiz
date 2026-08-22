@@ -13,5 +13,4 @@ public interface VocabularyRepository extends JpaRepository<Vocabulary, Long> {
 
     List<Vocabulary> findByCategoryIn(Collection<VocabularyCategory> categories);
 
-    long countByCategory(VocabularyCategory category);
 }

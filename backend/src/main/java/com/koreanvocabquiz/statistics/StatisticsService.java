@@ -2,6 +2,7 @@ package com.koreanvocabquiz.statistics;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +14,8 @@ import com.koreanvocabquiz.learning.VocabularyLearningProgressResponse;
 import com.koreanvocabquiz.quiz.QuizMode;
 import com.koreanvocabquiz.quiz.QuizQuestionSessionStore;
 import com.koreanvocabquiz.quiz.QuizQuestionSubmissionResult;
+import com.koreanvocabquiz.quiz.MasteredVocabularyRepository;
+import com.koreanvocabquiz.vocabulary.Vocabulary;
 import com.koreanvocabquiz.vocabulary.VocabularyCategory;
 import com.koreanvocabquiz.vocabulary.VocabularyRepository;
 import com.koreanvocabquiz.wronganswer.WrongAnswerRepository;
@@ -43,19 +46,22 @@ public class StatisticsService {
     private final WrongAnswerRepository wrongAnswerRepository;
     private final VocabularyLearningProgressRepository learningProgressRepository;
     private final VocabularyRepository vocabularyRepository;
+    private final MasteredVocabularyRepository masteredVocabularyRepository;
 
     public StatisticsService(
             QuizHistoryRepository quizHistoryRepository,
             QuizQuestionSessionStore sessionStore,
             WrongAnswerRepository wrongAnswerRepository,
             VocabularyLearningProgressRepository learningProgressRepository,
-            VocabularyRepository vocabularyRepository
+            VocabularyRepository vocabularyRepository,
+            MasteredVocabularyRepository masteredVocabularyRepository
     ) {
         this.quizHistoryRepository = quizHistoryRepository;
         this.sessionStore = sessionStore;
         this.wrongAnswerRepository = wrongAnswerRepository;
         this.learningProgressRepository = learningProgressRepository;
         this.vocabularyRepository = vocabularyRepository;
+        this.masteredVocabularyRepository = masteredVocabularyRepository;
     }
 
     @Transactional
@@ -101,6 +107,8 @@ public class StatisticsService {
 
     public StatisticsDashboardResponse dashboard() {
         List<QuizHistory> histories = quizHistoryRepository.findAllByOrderByCompletedAtDesc();
+        List<Vocabulary> vocabularies = vocabularyRepository.findAll();
+        Set<Long> attemptedVocabularyIds = attemptedVocabularyIds();
         LocalDate today = LocalDate.now();
         List<QuizHistory> todayHistories = histories.stream()
                 .filter(history -> history.getCompletedAt().toLocalDate().isEqual(today))
@@ -123,18 +131,29 @@ public class StatisticsService {
                         .stream()
                         .map(VocabularyLearningProgressResponse::from)
                         .toList(),
-                vocabularyRepository.count(),
-                learningProgressRepository.count(),
-                vocabularyCounts()
+                vocabularies.size(),
+                attemptedVocabularyIds.size(),
+                vocabularyCounts(vocabularies, attemptedVocabularyIds)
         );
     }
 
-    private List<VocabularyCountStat> vocabularyCounts() {
+    private Set<Long> attemptedVocabularyIds() {
+        Set<Long> attemptedIds = new HashSet<>(learningProgressRepository.findVocabularyIds());
+        attemptedIds.addAll(masteredVocabularyRepository.findMasteredVocabularyIds());
+        return attemptedIds;
+    }
+
+    private List<VocabularyCountStat> vocabularyCounts(List<Vocabulary> vocabularies, Set<Long> attemptedVocabularyIds) {
         return DASHBOARD_CATEGORIES.stream()
                 .map(category -> new VocabularyCountStat(
                         category,
-                        vocabularyRepository.countByCategory(category),
-                        learningProgressRepository.countByVocabularyCategory(category)
+                        vocabularies.stream()
+                                .filter(vocabulary -> vocabulary.getCategory() == category)
+                                .count(),
+                        vocabularies.stream()
+                                .filter(vocabulary -> vocabulary.getCategory() == category)
+                                .filter(vocabulary -> attemptedVocabularyIds.contains(vocabulary.getId()))
+                                .count()
                 ))
                 .toList();
     }
