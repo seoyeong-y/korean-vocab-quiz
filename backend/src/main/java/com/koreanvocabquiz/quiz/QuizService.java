@@ -63,6 +63,25 @@ public class QuizService {
         return createFromVocabularies(prioritizedVocabularies, prioritizedVocabularies, request.mode(), request.questionCount(), false);
     }
 
+    public List<QuizAvailabilityResponse> availability() {
+        Set<Long> masteredVocabularyIds = masteredVocabularyRepository.findMasteredVocabularyIds();
+        return List.of(
+                        VocabularyCategory.NATIVE_KOREAN,
+                        VocabularyCategory.SINO_KOREAN,
+                        VocabularyCategory.LOANWORD,
+                        VocabularyCategory.PROVERB,
+                        VocabularyCategory.IDIOM,
+                        VocabularyCategory.FOUR_CHARACTER_IDIOM
+                ).stream()
+                .map(category -> new QuizAvailabilityResponse(
+                        category,
+                        vocabularyRepository.findByCategory(category).stream()
+                                .filter(vocabulary -> !masteredVocabularyIds.contains(vocabulary.getId()))
+                                .count()
+                ))
+                .toList();
+    }
+
     private void validateMode(QuizCreateRequest request) {
         if (request.category() == VocabularyCategory.LOANWORD && request.mode() != QuizMode.MEANING_TO_WORD) {
             throw new QuizGenerationException("LOANWORD quizzes only support MEANING_TO_WORD mode.");

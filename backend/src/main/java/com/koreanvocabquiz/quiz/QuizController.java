@@ -5,6 +5,7 @@ import java.util.List;
 import jakarta.validation.Valid;
 
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,6 +25,11 @@ public class QuizController {
     @PostMapping
     public List<QuizQuestionResponse> create(@Valid @RequestBody QuizCreateRequest request) {
         return quizService.create(request);
+    }
+
+    @GetMapping("/availability")
+    public List<QuizAvailabilityResponse> availability() {
+        return quizService.availability();
     }
 
     @PostMapping("/submit")

@@ -129,6 +129,7 @@ npm run build
 | `POST` | `/api/vocabularies/image/extract` | 이미지 기반 어휘 후보 추출 |
 | `POST` | `/api/vocabularies/batch` | 검수 완료 어휘 일괄 저장 |
 | `POST` | `/api/quizzes` | 퀴즈 생성 |
+| `GET` | `/api/quizzes/availability` | 카테고리별 출제 가능 어휘 수 조회 |
 | `POST` | `/api/quizzes/submit` | 정답 제출 |
 | `POST` | `/api/quizzes/mastered` | 숙지 어휘 등록 |
 | `GET` | `/api/mastered-vocabularies` | 숙지 어휘 목록 조회 |
