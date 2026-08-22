@@ -703,11 +703,16 @@ dd {
   margin-top: 0;
 }
 
+.quiz-navigation .secondary-button {
+  justify-self: start;
+}
+
 .next-button {
   margin-top: var(--space-5);
 }
 
 .quiz-navigation .next-button {
+  justify-self: end;
   margin-top: 0;
 }
 
