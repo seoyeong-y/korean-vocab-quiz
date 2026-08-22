@@ -359,6 +359,10 @@ function App() {
         selectedText: option.text,
         correct: result.correct,
         correctAnswer: result.correctAnswer,
+        selectedAnswer: result.selectedAnswer,
+        selectedWord: result.selectedWord,
+        selectedMeaning: result.selectedMeaning,
+        mode: currentQuestion.mode,
       };
 
       setQuestionStates((previousStates) => ({
@@ -422,6 +426,10 @@ function App() {
         selectedText: answerText,
         correct: result.correct,
         correctAnswer: result.correctAnswer,
+        selectedAnswer: result.selectedAnswer,
+        selectedWord: result.selectedWord,
+        selectedMeaning: result.selectedMeaning,
+        mode: currentQuestion.mode,
       };
 
       setQuestionStates((previousStates) => ({
@@ -1738,6 +1746,13 @@ function QuizScreen({
           <strong>{feedback.masteredOnly ? '숙지 어휘로 기록했습니다.' : feedback.correct ? '정답입니다.' : '오답입니다.'}</strong>
           {feedback.masteredOnly && <span>앞으로 일반 퀴즈와 오답 복습에서 제외됩니다.</span>}
           {!feedback.correct && <span>정답: {feedback.correctAnswer}</span>}
+          {!feedback.correct && feedback.selectedWord && feedback.selectedMeaning && (
+            <span>
+              {feedback.mode === 'WORD_TO_MEANING'
+                ? `선택한 오답에 해당하는 어휘는 ${feedback.selectedWord}입니다.`
+                : `선택한 오답에 해당하는 뜻은 ${feedback.selectedMeaning}입니다.`}
+            </span>
+          )}
         </div>
       )}
       {isMastered && !feedback?.masteredOnly && (

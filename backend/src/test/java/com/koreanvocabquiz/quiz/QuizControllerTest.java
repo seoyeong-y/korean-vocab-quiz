@@ -234,7 +234,10 @@ class QuizControllerTest {
                                 }
                                 """.formatted(session.questionId(), session.selectedOptionId())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.correct").value(false));
+                .andExpect(jsonPath("$.correct").value(false))
+                .andExpect(jsonPath("$.selectedAnswer").value("banana"))
+                .andExpect(jsonPath("$.selectedWord").value("바나나"))
+                .andExpect(jsonPath("$.selectedMeaning").value("banana"));
 
         assertEquals(0, learningProgressRepository.count());
     }
@@ -254,7 +257,11 @@ class QuizControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.correct").value(false))
                 .andExpect(jsonPath("$.correctAnswer").value("사과"))
-                .andExpect(jsonPath("$.vocabularyId").value(apple.getId()));
+                .andExpect(jsonPath("$.vocabularyId").value(apple.getId()))
+                .andExpect(jsonPath("$.selectedAnswer").value("바나나"))
+                .andExpect(jsonPath("$.selectedVocabularyId").value(banana.getId()))
+                .andExpect(jsonPath("$.selectedWord").value("바나나"))
+                .andExpect(jsonPath("$.selectedMeaning").value("banana"));
     }
 
     @Test

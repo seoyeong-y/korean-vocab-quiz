@@ -173,6 +173,7 @@ public class QuizService {
 
         Vocabulary correctVocabulary = vocabularyRepository.findById(session.vocabularyId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vocabulary not found. id=" + session.vocabularyId()));
+        Vocabulary selectedVocabulary = null;
 
         boolean textAnswer = request.selectedAnswer() != null && !request.selectedAnswer().isBlank();
         boolean optionAnswer = request.selectedOptionId() != null && !request.selectedOptionId().isBlank();
@@ -187,6 +188,10 @@ public class QuizService {
             }
         } else if (request.selectedOptionId() == null || !session.optionVocabularyIds().containsKey(request.selectedOptionId())) {
             throw new QuizSubmissionException("Selected option is not included in the question.");
+        } else {
+            Long selectedVocabularyId = session.optionVocabularyIds().get(request.selectedOptionId());
+            selectedVocabulary = vocabularyRepository.findById(selectedVocabularyId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Selected vocabulary not found. id=" + selectedVocabularyId));
         }
 
         boolean correct = textAnswer
@@ -210,7 +215,15 @@ public class QuizService {
                 false
         ));
 
-        return new QuizSubmitResponse(correct, session.correctAnswer(), correctVocabulary.getId());
+        return new QuizSubmitResponse(
+                correct,
+                session.correctAnswer(),
+                correctVocabulary.getId(),
+                textAnswer ? request.selectedAnswer().trim() : answerText(selectedVocabulary, session.mode()),
+                selectedVocabulary == null ? null : selectedVocabulary.getId(),
+                selectedVocabulary == null ? null : selectedVocabulary.getWord(),
+                selectedVocabulary == null ? null : selectedVocabulary.getMeaning()
+        );
     }
 
     @Transactional
