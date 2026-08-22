@@ -1,9 +1,12 @@
 package com.koreanvocabquiz.vocabulary;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.matchesPattern;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -18,6 +21,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.core.env.Environment;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
@@ -37,6 +42,12 @@ class VocabularyControllerTest {
 
     @Autowired
     private VocabularyRepository vocabularyRepository;
+
+    @Autowired
+    private Environment environment;
+
+    @MockBean
+    private VocabularyImageAnalysisClient vocabularyImageAnalysisClient;
 
     @BeforeEach
     void setUp() {
@@ -202,5 +213,262 @@ class VocabularyControllerTest {
         mockMvc.perform(multipart("/api/vocabularies/csv").file(file))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.messages[0]").value("CSV must contain word, meaning, and category columns."));
+    }
+
+    @Test
+    void extractVocabularyFromImage() throws Exception {
+        when(vocabularyImageAnalysisClient.extract(anyList()))
+                .thenReturn(List.of(new VocabularyImageAnalysisResult(
+                        1,
+                        "각골난망",
+                        "은혜를 잊기 어려움",
+                        "FOUR_CHARACTER_IDIOM",
+                        false,
+                        0.91
+                )));
+
+        mockMvc.perform(multipart("/api/vocabularies/image/extract")
+                        .file(imageFile("files", "page.jpg", "image/jpeg")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(1))
+                .andExpect(jsonPath("$.items[0].imageNumber").value(1))
+                .andExpect(jsonPath("$.items[0].rowNumber").value(1))
+                .andExpect(jsonPath("$.items[0].word").value("각골난망"))
+                .andExpect(jsonPath("$.items[0].meaning").value("은혜를 잊기 어려움"))
+                .andExpect(jsonPath("$.items[0].category").value("FOUR_CHARACTER_IDIOM"))
+                .andExpect(jsonPath("$.items[0].needsReview").value(false))
+                .andExpect(jsonPath("$.items[0].confidence").value(0.91));
+
+        mockMvc.perform(get("/api/vocabularies"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
+    void extractVocabularyFromMultipleImages() throws Exception {
+        when(vocabularyImageAnalysisClient.extract(anyList()))
+                .thenReturn(List.of(
+                        new VocabularyImageAnalysisResult(1, "가람", "강", "NATIVE_KOREAN", false, 0.9),
+                        new VocabularyImageAnalysisResult(2, "결초보은", "은혜를 잊지 않고 갚음", "IDIOM", true, 0.62)
+                ));
+
+        mockMvc.perform(multipart("/api/vocabularies/image/extract")
+                        .file(imageFile("files", "first.png", "image/png"))
+                        .file(imageFile("files", "second.webp", "image/webp")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(2))
+                .andExpect(jsonPath("$.items[0].imageNumber").value(1))
+                .andExpect(jsonPath("$.items[1].imageNumber").value(2))
+                .andExpect(jsonPath("$.items[1].needsReview").value(true));
+    }
+
+    @Test
+    void extractVocabularyMergesNumberedMeaningsForSameWord() throws Exception {
+        when(vocabularyImageAnalysisClient.extract(anyList()))
+                .thenReturn(List.of(
+                        new VocabularyImageAnalysisResult(1, "가다", "① 한 곳에서 다른 곳으로 장소를 이동하다", "NATIVE_KOREAN", false, 0.91),
+                        new VocabularyImageAnalysisResult(1, "가다", "② 시간이 흐르다③ 어떤 상태가 계속되다", "NATIVE_KOREAN", false, 0.88),
+                        new VocabularyImageAnalysisResult(1, "가다", "④ 어떤 기준에 이르다", "SINO_KOREAN", true, 0.61),
+                        new VocabularyImageAnalysisResult(1, "나래", "날개", "NATIVE_KOREAN", false, 0.92)
+                ));
+
+        mockMvc.perform(multipart("/api/vocabularies/image/extract")
+                        .file(imageFile("files", "page.jpg", "image/jpeg")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(2))
+                .andExpect(jsonPath("$.items[0].imageNumber").value(1))
+                .andExpect(jsonPath("$.items[0].rowNumber").value(1))
+                .andExpect(jsonPath("$.items[0].word").value("가다"))
+                .andExpect(jsonPath("$.items[0].meaning").value("""
+                        ① 한 곳에서 다른 곳으로 장소를 이동하다
+                        ② 시간이 흐르다 ③ 어떤 상태가 계속되다
+                        ④ 어떤 기준에 이르다"""))
+                .andExpect(jsonPath("$.items[0].category").value("NATIVE_KOREAN"))
+                .andExpect(jsonPath("$.items[0].needsReview").value(true))
+                .andExpect(jsonPath("$.items[0].confidence").value(0.61))
+                .andExpect(jsonPath("$.items[1].word").value("나래"));
+    }
+
+    @Test
+    void multipartImageUploadLimitsAreConfigured() {
+        org.assertj.core.api.Assertions.assertThat(environment.getProperty("spring.servlet.multipart.max-file-size"))
+                .isEqualTo("10MB");
+        org.assertj.core.api.Assertions.assertThat(environment.getProperty("spring.servlet.multipart.max-request-size"))
+                .isEqualTo("50MB");
+    }
+
+    @Test
+    void acceptImageUpToTenMegabytes() throws Exception {
+        when(vocabularyImageAnalysisClient.extract(anyList()))
+                .thenReturn(List.of(new VocabularyImageAnalysisResult(
+                        1,
+                        "가람",
+                        "강을 뜻하는 옛말",
+                        "NATIVE_KOREAN",
+                        false,
+                        0.91
+                )));
+
+        MockMultipartFile file = new MockMultipartFile(
+                "files",
+                "ten-megabytes.jpg",
+                "image/jpeg",
+                new byte[10 * 1024 * 1024]
+        );
+
+        mockMvc.perform(multipart("/api/vocabularies/image/extract").file(file))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(1));
+    }
+
+    @Test
+    void rejectInvalidImageType() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "files",
+                "notes.txt",
+                "text/plain",
+                "not an image".getBytes(StandardCharsets.UTF_8)
+        );
+
+        mockMvc.perform(multipart("/api/vocabularies/image/extract").file(file))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.messages[0]").value("Only jpg, jpeg, png, and webp images are supported."));
+    }
+
+    @Test
+    void rejectOversizedImage() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "files",
+                "large.jpg",
+                "image/jpeg",
+                new byte[10 * 1024 * 1024 + 1]
+        );
+
+        mockMvc.perform(multipart("/api/vocabularies/image/extract").file(file))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.messages[0]").value("Image file size must be 10MB or less."));
+    }
+
+    @Test
+    void rejectOversizedImageRequest() throws Exception {
+        mockMvc.perform(multipart("/api/vocabularies/image/extract")
+                        .file(imageFileWithSize("files", "first.jpg", "image/jpeg", 10 * 1024 * 1024))
+                        .file(imageFileWithSize("files", "second.jpg", "image/jpeg", 10 * 1024 * 1024))
+                        .file(imageFileWithSize("files", "third.jpg", "image/jpeg", 10 * 1024 * 1024))
+                        .file(imageFileWithSize("files", "fourth.jpg", "image/jpeg", 10 * 1024 * 1024))
+                        .file(imageFileWithSize("files", "fifth.jpg", "image/jpeg", 10 * 1024 * 1024 + 1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.messages[0]").value("Total image upload size must be 50MB or less."));
+    }
+
+    @Test
+    void rejectTooManyImages() throws Exception {
+        mockMvc.perform(multipart("/api/vocabularies/image/extract")
+                        .file(imageFile("files", "first.jpg", "image/jpeg"))
+                        .file(imageFile("files", "second.jpg", "image/jpeg"))
+                        .file(imageFile("files", "third.jpg", "image/jpeg"))
+                        .file(imageFile("files", "fourth.jpg", "image/jpeg"))
+                        .file(imageFile("files", "fifth.jpg", "image/jpeg"))
+                        .file(imageFile("files", "sixth.jpg", "image/jpeg")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.messages[0]").value("Up to 5 images can be uploaded at once."));
+    }
+
+    @Test
+    void rejectInvalidCategoryFromAiResponse() throws Exception {
+        when(vocabularyImageAnalysisClient.extract(anyList()))
+                .thenReturn(List.of(new VocabularyImageAnalysisResult(1, "단어", "뜻", "UNKNOWN", false, 0.7)));
+
+        mockMvc.perform(multipart("/api/vocabularies/image/extract")
+                        .file(imageFile("files", "page.jpg", "image/jpeg")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.messages[0]").value("AI response contains an invalid category."));
+    }
+
+    @Test
+    void rejectEmptyAiExtractionResult() throws Exception {
+        when(vocabularyImageAnalysisClient.extract(anyList())).thenReturn(List.of());
+
+        mockMvc.perform(multipart("/api/vocabularies/image/extract")
+                        .file(imageFile("files", "page.jpg", "image/jpeg")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.messages[0]").value("No vocabulary entries were found in the image."));
+    }
+
+    @Test
+    void handleAiApiFailure() throws Exception {
+        when(vocabularyImageAnalysisClient.extract(anyList()))
+                .thenThrow(new VocabularyImageExtractionException("AI API call failed."));
+
+        mockMvc.perform(multipart("/api/vocabularies/image/extract")
+                        .file(imageFile("files", "page.jpg", "image/jpeg")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.messages[0]").value("AI API call failed."));
+    }
+
+    @Test
+    void saveReviewedVocabularyBatch() throws Exception {
+        vocabularyRepository.save(new Vocabulary("가람", "강", VocabularyCategory.NATIVE_KOREAN, null));
+
+        mockMvc.perform(post("/api/vocabularies/batch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "items": [
+                                    {
+                                      "word": "가람",
+                                      "meaning": "강",
+                                      "category": "NATIVE_KOREAN"
+                                    },
+                                    {
+                                      "word": "각골난망",
+                                      "meaning": "은혜를 잊기 어려움",
+                                      "category": "FOUR_CHARACTER_IDIOM"
+                                    },
+                                    {
+                                      "word": "",
+                                      "meaning": "뜻",
+                                      "category": "IDIOM"
+                                    },
+                                    {
+                                      "word": "잘못",
+                                      "meaning": "뜻",
+                                      "category": "UNKNOWN"
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(4))
+                .andExpect(jsonPath("$.successCount").value(1))
+                .andExpect(jsonPath("$.skippedCount").value(1))
+                .andExpect(jsonPath("$.failedCount").value(2))
+                .andExpect(jsonPath("$.skippedRows[0].rowNumber").value(1))
+                .andExpect(jsonPath("$.failedRows[0].rowNumber").value(3))
+                .andExpect(jsonPath("$.failedRows[0].reason").value("word is required"))
+                .andExpect(jsonPath("$.failedRows[1].rowNumber").value(4))
+                .andExpect(jsonPath("$.failedRows[1].reason").value(matchesPattern("category must be one of .*")));
+
+        mockMvc.perform(get("/api/vocabularies"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)));
+    }
+
+    private MockMultipartFile imageFile(String name, String filename, String contentType) {
+        return new MockMultipartFile(
+                name,
+                filename,
+                contentType,
+                "image".getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
+    private MockMultipartFile imageFileWithSize(String name, String filename, String contentType, int size) {
+        return new MockMultipartFile(
+                name,
+                filename,
+                contentType,
+                new byte[size]
+        );
     }
 }

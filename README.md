@@ -19,6 +19,7 @@ korean-vocab-quiz/
   backend/              # Spring Boot application
   frontend/             # React + Vite application
   docker-compose.yml    # frontend, backend, mysql local environment
+  docker-compose.prod.yml # EC2 production environment
   .env.example          # environment variable template
   .gitignore
   README.md
@@ -56,7 +57,21 @@ SPRING_DATASOURCE_USERNAME
 SPRING_DATASOURCE_PASSWORD
 APP_CORS_ALLOWED_ORIGIN
 VITE_API_BASE_URL
+HTTP_PORT
 ```
+
+Optional AI extraction variables:
+
+```text
+GEMINI_API_KEY
+GEMINI_MODEL
+ADMIN_PASSWORD
+```
+
+`GEMINI_API_KEY`는 이미지 기반 어휘 추출 기능에서만 백엔드가 사용합니다.
+프론트엔드로 전달하거나 Git에 커밋하지 마세요.
+
+`ADMIN_PASSWORD`는 어휘 생성·수정·삭제, CSV 등록, Gemini 이미지 추출, 검수 데이터 저장을 보호하는 관리자 비밀번호입니다. 실제 값은 서버의 `.env`에만 설정하고 Git에 커밋하지 마세요.
 
 ## Run With Docker Compose
 
@@ -71,6 +86,76 @@ This starts:
 - `mysql`
 
 MySQL data is stored in the named Docker volume `mysql-data`, so database data remains after container restart.
+
+## AWS EC2 Production Preparation
+
+실제 AWS 리소스를 생성하지 않고 production 컨테이너 구성을 검증하려면 `docker-compose.prod.yml`을 사용합니다.
+Production에서는 frontend Nginx만 호스트 포트를 사용하며, `/api/*` 요청은 Docker 내부의 `backend:8080`으로 reverse proxy됩니다. backend와 MySQL의 포트는 호스트에 publish하지 않습니다.
+
+EC2 서버에서 저장소를 받은 뒤 production용 `.env`를 직접 생성합니다. 실제 비밀번호와 Gemini API key는 파일이나 Git에 기록하지 마세요.
+
+```bash
+cp .env.example .env
+```
+
+Production `.env`는 다음처럼 서버 환경에 맞춰 수정합니다.
+
+```dotenv
+MYSQL_DATABASE=korean_vocab_quiz
+MYSQL_USER=korean_vocab_user
+MYSQL_PASSWORD=<strong-database-password>
+MYSQL_ROOT_PASSWORD=<strong-root-password>
+SPRING_PROFILES_ACTIVE=docker
+SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/korean_vocab_quiz?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+SPRING_DATASOURCE_USERNAME=korean_vocab_user
+SPRING_DATASOURCE_PASSWORD=<strong-database-password>
+APP_CORS_ALLOWED_ORIGIN=http://<domain-or-ec2-address>
+GEMINI_API_KEY=<gemini-api-key>
+GEMINI_MODEL=gemini-2.5-flash
+ADMIN_PASSWORD=<strong-admin-password>
+HTTP_PORT=80
+```
+
+`VITE_API_BASE_URL`은 production에서 설정하지 않습니다. frontend가 상대 경로 `/api`를 사용하고 Nginx가 backend로 전달합니다.
+
+Production 실행과 상태 확인:
+
+```bash
+docker compose -f docker-compose.prod.yml config
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f backend
+```
+
+브라우저에서는 `http://<domain-or-ec2-address>`로 접속합니다.
+
+MySQL은 `docker-compose.prod.yml`의 Compose 관리 named volume인 `mysql-data`에 저장됩니다. `external: true`나 호스트의 절대 경로를 사용하지 않으므로, 새 EC2에서 처음 실행하면 해당 Compose 프로젝트 전용 volume이 자동으로 생성됩니다. 로컬에서 이 저장소의 기본 프로젝트명으로 실행하면 기존 `korean-vocab-quiz_mysql-data` volume을 재사용할 수 있지만, EC2는 별도 호스트이므로 로컬 volume에 의존하지 않습니다.
+
+로컬 데이터를 EC2로 이전할 때는 Docker volume 자체를 복사하지 말고 `mysqldump`와 import를 사용합니다.
+
+로컬에서 dump:
+
+```bash
+docker compose exec -T mysql sh -c \
+  'mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --single-transaction "$MYSQL_DATABASE"' \
+  > korean_vocab.sql
+```
+
+EC2에서 import:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d mysql
+docker compose -f docker-compose.prod.yml exec -T mysql sh -c \
+  'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < korean_vocab.sql
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+EC2에서는 `docker volume create`를 별도로 실행할 필요가 없습니다. 데이터 손실을 막으려면 `docker compose down -v`를 실행하지 말고, 운영 전후에 dump 백업을 별도로 보관하세요.
+
+EC2 Security Group은 기본적으로 `22`(관리자 SSH), `80`(HTTP), `443`(HTTPS)만 허용하고 `3306`, `5173`, `8080`은 열지 않습니다. HTTPS가 필요하면 별도의 TLS 인증서와 reverse proxy 구성을 추가해야 합니다.
+
+관리자 변경 API는 `ADMIN_PASSWORD` 기반 세션 인증으로 보호됩니다. 공개 배포에서는 반드시 강한 비밀번호와 HTTPS를 사용하세요. 인증은 서버 메모리 세션이므로 backend를 여러 대로 확장할 때는 별도 세션 저장소나 인증 체계를 검토해야 합니다.
 
 ## Stop
 
@@ -116,6 +201,19 @@ npm run build
 | `PUT` | `/api/vocabularies/{id}` | 어휘 수정 |
 | `DELETE` | `/api/vocabularies/{id}` | 어휘 삭제 |
 | `POST` | `/api/vocabularies/csv` | CSV 어휘 대량 등록 |
+| `POST` | `/api/vocabularies/image/extract` | 이미지 기반 어휘 후보 추출 |
+| `POST` | `/api/vocabularies/batch` | 검수 완료 어휘 일괄 저장 |
+| `POST` | `/api/quizzes` | 퀴즈 생성 |
+| `GET` | `/api/quizzes/availability` | 카테고리별 출제 가능 어휘 수 조회 |
+| `POST` | `/api/quizzes/submit` | 정답 제출 |
+| `POST` | `/api/quizzes/mastered` | 숙지 어휘 등록 |
+| `GET` | `/api/mastered-vocabularies` | 숙지 어휘 목록 조회 |
+| `POST` | `/api/statistics/quiz-completions` | 일반 퀴즈 완료 기록 저장 |
+| `GET` | `/api/statistics/dashboard` | 학습 통계 대시보드 조회 |
+| `GET` | `/api/wrong-answers` | 오답 목록 조회 |
+| `POST` | `/api/wrong-answers/quizzes` | 오답 복습 퀴즈 생성 |
+| `DELETE` | `/api/wrong-answers/{id}` | 오답 개별 삭제 |
+| `DELETE` | `/api/wrong-answers` | 오답 전체 삭제 |
 
 Request body:
 
@@ -133,12 +231,17 @@ Request body:
 Available categories:
 
 ```text
+NATIVE_KOREAN
+SINO_KOREAN
+LOANWORD
+PROVERB
+IDIOM
+FOUR_CHARACTER_IDIOM
 GENERAL
 NOUN
 VERB
 ADJECTIVE
 ADVERB
-IDIOM
 ```
 
 ## Vocabulary CSV Upload
@@ -154,8 +257,8 @@ CSV format:
 
 ```csv
 word,meaning,category
-가교,둘 사이를 이어 주는 것,GENERAL
-간과하다,대충 보아 넘기다,VERB
+가람,강,NATIVE_KOREAN
+간과하다,대충 보아 넘기다,SINO_KOREAN
 ```
 
 Required columns:
@@ -196,11 +299,441 @@ Response example:
     },
     {
       "rowNumber": 4,
-      "reason": "category must be one of [GENERAL, NOUN, VERB, ADJECTIVE, ADVERB, IDIOM]"
+      "reason": "category must be one of [NATIVE_KOREAN, SINO_KOREAN, LOANWORD, PROVERB, IDIOM, FOUR_CHARACTER_IDIOM, GENERAL, NOUN, VERB, ADJECTIVE, ADVERB]"
     }
   ]
 }
 ```
+
+## Admin Image Vocabulary Extraction
+
+관리자 화면에서는 책이나 학습자료 이미지를 업로드해 AI가 어휘 후보를 추출하도록 할 수 있습니다.
+이 기능은 AI가 DB 저장까지 자동으로 수행하지 않습니다.
+
+처리 흐름:
+
+1. 관리자 화면에서 이미지 업로드
+2. 백엔드가 Gemini API로 `word`, `meaning`, `category`, `needsReview` 후보 추출
+3. 추출 결과를 DB에 저장하지 않고 프론트 검수 화면에 표시
+4. 관리자가 저장 여부, 단어, 뜻, 카테고리를 확인 및 수정
+5. `검수 완료 및 저장` 버튼 클릭
+6. 선택된 최종 데이터만 `/api/vocabularies/batch`로 저장
+
+Supported image formats:
+
+```text
+jpg
+jpeg
+png
+webp
+```
+
+Limits:
+
+- 한 번에 최대 5장까지 업로드할 수 있습니다.
+- 이미지 파일 1개는 10MB 이하여야 합니다.
+- 요청 전체 크기는 50MB 이하여야 합니다.
+- 업로드 MIME type은 `image/jpeg`, `image/png`, `image/webp`만 허용합니다.
+
+AI category classification:
+
+- `NATIVE_KOREAN`: 고유어
+- `SINO_KOREAN`: 한자어
+- `LOANWORD`: 외래어
+- `PROVERB`: 속담
+- `IDIOM`: 관용어
+- `FOUR_CHARACTER_IDIOM`: 사자성어
+
+AI가 분류를 확신하기 어려운 항목은 `needsReview: true`로 표시됩니다.
+그래도 DB 저장 시점에는 관리자가 최종적으로 위 카테고리 중 하나를 선택해야 합니다.
+
+Extract candidates from images:
+
+```bash
+curl -X POST http://localhost:8080/api/vocabularies/image/extract \
+  -F "files=@page-1.jpg" \
+  -F "files=@page-2.png"
+```
+
+Extraction response example:
+
+```json
+{
+  "totalCount": 1,
+  "items": [
+    {
+      "imageNumber": 1,
+      "rowNumber": 1,
+      "word": "가람",
+      "meaning": "강을 뜻하는 옛말",
+      "category": "NATIVE_KOREAN",
+      "needsReview": false,
+      "confidence": 0.91
+    }
+  ]
+}
+```
+
+Save reviewed candidates:
+
+```bash
+curl -X POST http://localhost:8080/api/vocabularies/batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {
+        "word": "가람",
+        "meaning": "강을 뜻하는 옛말",
+        "category": "NATIVE_KOREAN"
+      }
+    ]
+  }'
+```
+
+저장 결과는 CSV 대량 등록과 동일하게 `success`, `skipped`, `failed`로 집계됩니다.
+중복 기준은 `word + meaning + category`입니다.
+이미 DB에 같은 항목이 있으면 오류가 아니라 `skipped`로 처리됩니다.
+
+Failure cases shown to users:
+
+- 잘못된 파일 형식
+- 파일 크기 초과
+- AI API 호출 실패
+- 이미지에서 어휘를 찾지 못함
+- AI 응답 형식 오류
+- category 분류 실패
+- 저장 validation 실패
+
+This feature can incur Gemini API costs when images are analyzed.
+관리자 페이지 진입 시 비밀번호를 입력해야 하며, 인증된 세션에서만 관리자 변경 API를 사용할 수 있습니다. 일반 퀴즈, 오답노트, 학습 통계 API는 공개 접근을 유지합니다.
+
+## Quiz API
+
+Quiz modes:
+
+```text
+WORD_TO_MEANING
+MEANING_TO_WORD
+MIXED
+```
+
+`WORD_TO_MEANING`은 단어를 보고 뜻을 고르는 방식입니다.
+`MEANING_TO_WORD`는 뜻을 보고 단어를 고르는 방식입니다.
+`MIXED`는 문제마다 `WORD_TO_MEANING` 또는 `MEANING_TO_WORD`를 랜덤으로 선택하는 방식입니다.
+
+Create quiz:
+
+```bash
+curl -X POST http://localhost:8080/api/quizzes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "category": "NATIVE_KOREAN",
+    "mode": "WORD_TO_MEANING",
+    "questionCount": 2
+  }'
+```
+
+Quiz generation rules:
+
+- `category`는 `VocabularyCategory` 값 중 하나여야 합니다.
+- 프론트엔드 기본 퀴즈 화면은 `NATIVE_KOREAN`, `SINO_KOREAN`, `LOANWORD`, `PROVERB`, `IDIOM`, `FOUR_CHARACTER_IDIOM`을 고유어, 한자어, 외래어, 속담, 관용어, 사자성어로 표시합니다.
+- `questionCount`는 1 이상이어야 합니다.
+- 선택한 category의 어휘 중 아직 풀지 않은 어휘를 우선 출제합니다.
+- 모두 풀어본 어휘라면 `attemptCount`가 낮은 어휘를 우선하고, 같은 풀이 횟수 안에서는 랜덤으로 섞어 출제합니다.
+- `MIXED`로 생성한 문제도 응답의 `mode`에는 실제 출제 방향인 `WORD_TO_MEANING` 또는 `MEANING_TO_WORD`가 내려갑니다.
+- `완벽하게 알아요`로 등록한 숙지 어휘는 일반 퀴즈 생성 대상에서 제외됩니다.
+- 같은 퀴즈 세트 안에서 동일한 `vocabularyId`는 중복 출제되지 않습니다.
+- 각 문제는 정답 1개와 오답 3개를 포함한 4지선다입니다.
+- 오답은 같은 category의 다른 Vocabulary에서 가져옵니다.
+- 같은 선택지 text가 중복되어 정답이 여러 개처럼 보이지 않도록 생성합니다.
+- 선택지 순서는 매번 랜덤으로 섞입니다.
+- 퀴즈 문제 자체는 DB에 저장하지 않고 Vocabulary 데이터를 기반으로 동적으로 생성합니다.
+- 생성된 각 문제는 서버 메모리에 30분 동안 저장되는 `questionId`로 식별합니다.
+- `optionId`는 Vocabulary ID가 아니라 해당 문제의 선택지를 검증하기 위한 임의 식별자입니다.
+- 생성 응답에는 정답 option 정보가 노출되지 않습니다.
+- 정답 제출 시 서버는 `questionId`가 실제 생성된 문제인지, 선택한 `optionId`가 해당 문제의 options에 포함되는지 검증합니다.
+- 정답 여부는 표시 text가 아니라 서버가 저장한 정답 `optionId` 기준으로 판정합니다.
+
+Create quiz response example:
+
+```json
+[
+  {
+    "questionId": "b2e4c407-67e0-4203-bb01-1306a5a790d1",
+    "vocabularyId": 1,
+    "mode": "WORD_TO_MEANING",
+    "questionText": "사과",
+    "options": [
+      {
+        "optionId": "81db62b4-4f66-4287-94d0-5b0e7564e353",
+        "text": "grape"
+      },
+      {
+        "optionId": "8eb9e671-d53f-4afd-a2db-6b904195a513",
+        "text": "apple"
+      },
+      {
+        "optionId": "f96ced35-8ea0-4a8b-b20f-bb7757a029b8",
+        "text": "banana"
+      },
+      {
+        "optionId": "567cbffd-00f8-4c31-a236-15083cb295f1",
+        "text": "strawberry"
+      }
+    ]
+  }
+]
+```
+
+Submit answer:
+
+```bash
+curl -X POST http://localhost:8080/api/quizzes/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "questionId": "b2e4c407-67e0-4203-bb01-1306a5a790d1",
+    "selectedOptionId": "8eb9e671-d53f-4afd-a2db-6b904195a513",
+    "wrongAnswerReview": false
+  }'
+```
+
+Submit answer response example:
+
+```json
+{
+  "correct": true,
+  "correctAnswer": "apple",
+  "vocabularyId": 1,
+  "selectedAnswer": "apple",
+  "selectedVocabularyId": 1,
+  "selectedWord": "사과",
+  "selectedMeaning": "apple"
+}
+```
+
+오답 제출 시 응답의 `selectedWord`와 `selectedMeaning`을 이용해 사용자가 선택한 답에 대응하는 어휘도 함께 확인할 수 있습니다.
+
+외래어(`LOANWORD`) 퀴즈는 4지선다 선택지를 제공하지 않고, 뜻을 보고 단어를 직접 입력하는 주관식으로 출제됩니다.
+생성 응답의 `options`는 비어 있으며 정답은 응답에 포함되지 않습니다. 제출할 때는 서버가 발급한 `questionId`와 입력한 `selectedAnswer`를 전달합니다.
+
+```bash
+curl -X POST http://localhost:8080/api/quizzes/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "questionId": "b2e4c407-67e0-4203-bb01-1306a5a790d1",
+    "selectedAnswer": "카메라",
+    "wrongAnswerReview": false
+  }'
+```
+
+Mark a question as mastered:
+
+```bash
+curl -X POST http://localhost:8080/api/quizzes/mastered \
+  -H "Content-Type: application/json" \
+  -d '{
+    "questionId": "b2e4c407-67e0-4203-bb01-1306a5a790d1"
+  }'
+```
+
+Mastered response example:
+
+```json
+{
+  "mastered": true,
+  "correctAnswer": "apple",
+  "vocabularyId": 1
+}
+```
+
+숙지 어휘 등록은 서버가 실제로 생성한 `questionId`만 받습니다.
+숙지 처리된 어휘는 `mastered_vocabularies`에 저장되며, 같은 어휘가 오답노트에 남아 있으면 함께 제거됩니다.
+현재 MVP에서는 로그인 없이 전체 사용자 공통 숙지 목록으로 동작합니다.
+
+List mastered vocabularies:
+
+```bash
+curl http://localhost:8080/api/mastered-vocabularies
+```
+
+Response example:
+
+```json
+[
+  {
+    "id": 1,
+    "vocabularyId": 1,
+    "word": "사과",
+    "meaning": "apple",
+    "category": "NATIVE_KOREAN",
+    "masteredAt": "2026-08-21T19:30:00"
+  }
+]
+```
+
+Quiz error cases:
+
+- 선택한 category의 어휘가 4개 미만이면 4지선다 퀴즈를 생성할 수 없습니다.
+- 숙지 처리된 어휘를 제외한 전체 출제 가능 어휘 수보다 `questionCount`가 크면 생성할 수 없습니다.
+- 미출제 어휘를 먼저 선택하고, 요청한 문제 수가 미출제 어휘 수보다 많으면 풀이 횟수가 적은 어휘 그룹부터 부족한 수만큼 보충합니다. 같은 풀이 횟수 그룹 안에서는 무작위로 선택합니다.
+- 같은 category 안에 선택지로 사용할 서로 다른 text가 4개 미만이면 생성할 수 없습니다.
+- `LOANWORD` 외래어 퀴즈는 `MEANING_TO_WORD`(뜻 → 단어) 모드만 사용할 수 있습니다.
+- `LOANWORD` 외래어 퀴즈는 선택지 없이 단어 입력으로만 답안을 제출합니다. 서버는 해당 문제 세션의 정답과 입력값을 비교합니다.
+- 존재하지 않는 category 또는 mode는 400 응답으로 처리됩니다.
+- 생성되지 않았거나 만료된 `questionId`로 제출하면 400 응답으로 처리됩니다.
+- 해당 문제의 options에 없는 `selectedOptionId`로 제출하면 400 응답으로 처리됩니다.
+- 정답 제출 시 클라이언트의 정답 여부는 신뢰하지 않고 서버가 저장한 문제 세션을 기준으로 판정합니다.
+- 생성되지 않았거나 만료된 `questionId`로 숙지 등록을 요청하면 400 응답으로 처리됩니다.
+
+## Learning Statistics
+
+일반 퀴즈를 끝까지 완료하면 프론트엔드가 문제들의 `questionId` 목록을 `/api/statistics/quiz-completions`로 전달합니다.
+서버는 각 문제의 제출 결과를 서버 메모리에 기록해 두었다가, 완료 요청 시 해당 결과를 기준으로 `quiz_histories`에 저장합니다.
+따라서 통계의 정답/오답 수는 프론트에서 계산한 값을 그대로 신뢰하지 않습니다.
+
+일반 퀴즈에서 선택지를 제출하면 해당 Vocabulary 기준으로 `vocabulary_learning_progresses`를 즉시 갱신합니다.
+이 테이블은 어휘별 풀이 횟수, 정답 횟수, 오답 횟수, 마지막 풀이 시각을 저장하며, 다음 일반 퀴즈 생성 시 풀지 않은 어휘와 적게 푼 어휘를 우선 출제하는 데 사용합니다.
+퀴즈를 중간에 멈추더라도 이미 제출한 선택지의 단어별 풀이 기록은 DB에 남습니다.
+
+오답 복습 퀴즈는 일반 학습 정답률과 단어별 일반 풀이 기록을 왜곡하지 않도록 현재 통계 저장 대상에서 제외합니다.
+`MIXED` 모드로 완료한 퀴즈는 `quiz_mode`에 `MIXED`로 저장됩니다.
+
+Complete a general quiz:
+
+```bash
+curl -X POST http://localhost:8080/api/statistics/quiz-completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "category": "NATIVE_KOREAN",
+    "mode": "WORD_TO_MEANING",
+    "questionIds": [
+      "b2e4c407-67e0-4203-bb01-1306a5a790d1",
+      "63cf230f-2099-4be0-b27a-6b27d808ac1e"
+    ],
+    "wrongAnswerReview": false
+  }'
+```
+
+Completion response example:
+
+```json
+{
+  "id": 1,
+  "completedAt": "2026-08-21T19:30:00",
+  "category": "NATIVE_KOREAN",
+  "quizMode": "WORD_TO_MEANING",
+  "totalCount": 10,
+  "correctCount": 8,
+  "incorrectCount": 2,
+  "accuracy": 80
+}
+```
+
+Dashboard:
+
+```bash
+curl http://localhost:8080/api/statistics/dashboard
+```
+
+Dashboard response includes:
+
+- `total`: 누적 풀이 문제 수, 정답 수, 오답 수, 전체 정답률, 완료한 퀴즈 횟수
+- `today`: 오늘 풀이 문제 수, 정답 수, 오답 수, 오늘 정답률
+- `categories`: 고유어, 한자어, 외래어, 속담, 관용어, 사자성어별 통계
+- `modes`: `WORD_TO_MEANING`, `MEANING_TO_WORD`, `MIXED` 모드별 통계
+- `recentHistories`: 최근 완료한 일반 퀴즈 기록 10개
+- `mostWrongVocabularies`: 기존 `wrong_answers` 기준 많이 틀린 어휘 상위 5개
+- `vocabularyProgresses`: 최근 풀이한 어휘별 풀이 횟수, 정답/오답 수, 정답률 20개
+
+마이 페이지에서는 학습 통계, 많이 틀린 어휘, 최근 학습 기록, 틀린 문제, 풀어본 어휘, 완벽히 아는 문제를 함께 확인할 수 있습니다.
+현재 MVP에서는 로그인 기능이 없으므로 모든 통계와 숙지/오답 목록은 단일 사용자 데이터처럼 동작합니다.
+
+## Wrong Answer Review
+
+일반 퀴즈에서 오답을 제출하면 서버가 정답 판정 결과를 기준으로 해당 Vocabulary를 오답 목록에 자동 저장합니다.
+클라이언트가 보낸 정답 여부 값은 사용하지 않습니다.
+
+Wrong answer storage rules:
+
+- 오답은 `vocabularyId + quizMode` 조합으로 관리합니다.
+- 같은 `vocabularyId + quizMode` 오답이 이미 있으면 새 row를 만들지 않고 `wrongCount`를 1 증가시키고 `lastWrongAt`을 갱신합니다.
+- 일반 퀴즈에서 정답을 맞힌 경우 기존 오답 목록은 변경하지 않습니다.
+- 오답 복습에서 정답을 맞히면 해당 `vocabularyId + quizMode` 오답 데이터를 삭제합니다.
+- 오답 복습에서 다시 틀리면 일반 오답과 동일하게 `wrongCount`를 증가시키고 `lastWrongAt`을 갱신합니다.
+- 현재 정책은 오답 복습에서 1회 정답 시 제거입니다.
+
+List wrong answers:
+
+```bash
+curl http://localhost:8080/api/wrong-answers
+```
+
+Wrong answer response example:
+
+```json
+[
+  {
+    "id": 1,
+    "vocabularyId": 10,
+    "word": "가람",
+    "meaning": "강",
+    "category": "NATIVE_KOREAN",
+    "quizMode": "WORD_TO_MEANING",
+    "wrongCount": 2,
+    "lastWrongAt": "2026-08-21T10:30:00"
+  }
+]
+```
+
+Create wrong answer review quiz:
+
+```bash
+curl -X POST http://localhost:8080/api/wrong-answers/quizzes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "WORD_TO_MEANING",
+    "questionCount": 4
+  }'
+```
+
+오답 복습 퀴즈는 실제 문제로 출제되는 Vocabulary만 오답 목록에서 가져옵니다.
+오답 선택지 distractor는 해당 Vocabulary와 같은 category의 전체 Vocabulary에서 가져오기 때문에,
+오답이 1개뿐이어도 같은 category에 충분한 어휘와 고유한 선택지 text가 있으면 복습할 수 있습니다.
+
+Submit a review answer:
+
+```bash
+curl -X POST http://localhost:8080/api/quizzes/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "questionId": "63cf230f-2099-4be0-b27a-6b27d808ac1e",
+    "selectedOptionId": "33333095-3f48-49f1-bc47-31ae23698a0b",
+    "wrongAnswerReview": true
+  }'
+```
+
+오답 복습 생성 요청에 `category`를 함께 보내면 해당 카테고리의 오답만 대상으로 할 수 있습니다. 생략하면 선택한 모드의 전체 오답을 대상으로 합니다.
+
+```json
+{
+  "category": "NATIVE_KOREAN",
+  "mode": "WORD_TO_MEANING",
+  "questionCount": 5
+}
+```
+
+Delete wrong answers:
+
+```bash
+curl -X DELETE http://localhost:8080/api/wrong-answers/1
+curl -X DELETE http://localhost:8080/api/wrong-answers
+```
+
+Wrong answer review error cases:
+
+- 오답 목록이 없으면 복습 퀴즈를 생성할 수 없습니다.
+- 오답 Vocabulary와 같은 category 전체에서도 4개의 고유한 선택지 text를 만들 수 없으면 생성할 수 없습니다.
+- `questionCount`가 출제 가능한 오답 어휘 수보다 크면 생성할 수 없습니다.
 
 ## Current Scope
 
@@ -213,12 +746,13 @@ Implemented in this setup:
 - Environment variable based database configuration
 - Vocabulary entity and CRUD API
 - Vocabulary CSV upload
+- Quiz generation API
+- Quiz answer submission API
+- Frontend quiz UI
+- Wrong-answer storage and review
 
 Not implemented yet:
 
-- Quiz generation
-- Answer checking
-- Wrong-answer storage or review
 - User accounts
 - Authentication or authorization
 - AWS resource creation or deployment
