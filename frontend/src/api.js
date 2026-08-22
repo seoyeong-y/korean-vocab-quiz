@@ -3,6 +3,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 async function request(path, options = {}) {
   const isFormData = options.body instanceof FormData;
   const response = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: 'include',
     headers: {
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...options.headers,
@@ -20,6 +21,23 @@ async function request(path, options = {}) {
   }
 
   return data;
+}
+
+export function getAdminAuthStatus() {
+  return request('/api/admin/auth');
+}
+
+export function authenticateAdmin(password) {
+  return request('/api/admin/auth', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  });
+}
+
+export function logoutAdmin() {
+  return request('/api/admin/auth', {
+    method: 'DELETE',
+  });
 }
 
 export function createQuiz(payload) {

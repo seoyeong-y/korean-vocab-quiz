@@ -65,10 +65,13 @@ Optional AI extraction variables:
 ```text
 GEMINI_API_KEY
 GEMINI_MODEL
+ADMIN_PASSWORD
 ```
 
 `GEMINI_API_KEY`는 이미지 기반 어휘 추출 기능에서만 백엔드가 사용합니다.
 프론트엔드로 전달하거나 Git에 커밋하지 마세요.
+
+`ADMIN_PASSWORD`는 어휘 생성·수정·삭제, CSV 등록, Gemini 이미지 추출, 검수 데이터 저장을 보호하는 관리자 비밀번호입니다. 실제 값은 서버의 `.env`에만 설정하고 Git에 커밋하지 마세요.
 
 ## Run With Docker Compose
 
@@ -109,6 +112,7 @@ SPRING_DATASOURCE_PASSWORD=<strong-database-password>
 APP_CORS_ALLOWED_ORIGIN=http://<domain-or-ec2-address>
 GEMINI_API_KEY=<gemini-api-key>
 GEMINI_MODEL=gemini-2.5-flash
+ADMIN_PASSWORD=<strong-admin-password>
 HTTP_PORT=80
 ```
 
@@ -127,7 +131,7 @@ docker compose -f docker-compose.prod.yml logs -f backend
 
 EC2 Security Group은 기본적으로 `22`(관리자 SSH), `80`(HTTP), `443`(HTTPS)만 허용하고 `3306`, `5173`, `8080`은 열지 않습니다. HTTPS가 필요하면 별도의 TLS 인증서와 reverse proxy 구성을 추가해야 합니다.
 
-현재 관리자 이미지 추출 기능은 인증 없이 노출되어 있습니다. 공개 배포 시 누구나 Gemini API 비용을 발생시키거나 어휘를 변경할 수 있으므로, 운영 공개 전 관리자 인증과 권한 제어를 반드시 추가해야 합니다. 이번 배포 구성에서는 인증 시스템을 임의로 추가하지 않았습니다.
+관리자 변경 API는 `ADMIN_PASSWORD` 기반 세션 인증으로 보호됩니다. 공개 배포에서는 반드시 강한 비밀번호와 HTTPS를 사용하세요. 인증은 서버 메모리 세션이므로 backend를 여러 대로 확장할 때는 별도 세션 저장소나 인증 체계를 검토해야 합니다.
 
 ## Stop
 
@@ -377,7 +381,7 @@ Failure cases shown to users:
 - 저장 validation 실패
 
 This feature can incur Gemini API costs when images are analyzed.
-Local MVP에서는 관리자 기능 보호가 없으므로, 공개 배포 전 인증/인가나 네트워크 접근 제한으로 관리자 화면과 API를 보호해야 합니다.
+관리자 페이지 진입 시 비밀번호를 입력해야 하며, 인증된 세션에서만 관리자 변경 API를 사용할 수 있습니다. 일반 퀴즈, 오답노트, 학습 통계 API는 공개 접근을 유지합니다.
 
 ## Quiz API
 

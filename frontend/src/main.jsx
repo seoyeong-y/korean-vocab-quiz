@@ -1,16 +1,19 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import {
+  authenticateAdmin,
   completeQuiz,
   createQuiz,
   createWrongAnswerReviewQuiz,
   deleteAllWrongAnswers,
   deleteWrongAnswer,
   extractVocabularyFromImages,
+  getAdminAuthStatus,
   getMasteredVocabularies,
   getQuizAvailability,
   getStatisticsDashboard,
   getWrongAnswers,
+  logoutAdmin,
   markQuizQuestionMastered,
   saveVocabularyBatch,
   submitQuizAnswer,
@@ -1209,6 +1212,10 @@ function LearningWordItem({ category, title, description, meta }) {
 }
 
 function AdminImageVocabularyScreen({ onBack }) {
+  const [authenticated, setAuthenticated] = React.useState(null);
+  const [adminPassword, setAdminPassword] = React.useState('');
+  const [authLoading, setAuthLoading] = React.useState(true);
+  const [authError, setAuthError] = React.useState('');
   const [files, setFiles] = React.useState([]);
   const [items, setItems] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
@@ -1218,6 +1225,36 @@ function AdminImageVocabularyScreen({ onBack }) {
   const manualRowSequence = React.useRef(1);
 
   const selectedCount = items.filter((item) => item.selected).length;
+
+  React.useEffect(() => {
+    getAdminAuthStatus()
+      .then((response) => setAuthenticated(Boolean(response.authenticated)))
+      .catch(() => setAuthenticated(false))
+      .finally(() => setAuthLoading(false));
+  }, []);
+
+  async function handleAdminLogin(event) {
+    event.preventDefault();
+    setAuthLoading(true);
+    setAuthError('');
+
+    try {
+      await authenticateAdmin(adminPassword);
+      setAdminPassword('');
+      setAuthenticated(true);
+    } catch (loginError) {
+      setAuthError(normalizeError(loginError.message));
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function handleAdminLogout() {
+    await logoutAdmin().catch(() => {});
+    setAuthenticated(false);
+    setItems([]);
+    setFiles([]);
+  }
 
   function handleFileChange(event) {
     const selectedFiles = Array.from(event.target.files || []);
@@ -1256,6 +1293,9 @@ function AdminImageVocabularyScreen({ onBack }) {
         setError('이미지에서 어휘를 찾지 못했습니다.');
       }
     } catch (extractError) {
+      if (extractError.message.includes('Admin authentication is required')) {
+        setAuthenticated(false);
+      }
       setError(normalizeError(extractError.message));
     } finally {
       setLoading(false);
@@ -1317,10 +1357,53 @@ function AdminImageVocabularyScreen({ onBack }) {
         sourceItems: selectedItems,
       });
     } catch (saveError) {
+      if (saveError.message.includes('Admin authentication is required')) {
+        setAuthenticated(false);
+      }
       setError(normalizeError(saveError.message));
     } finally {
       setSaving(false);
     }
+  }
+
+  if (authLoading) {
+    return (
+      <section className="panel admin-panel" aria-live="polite">
+        <p className="status-message">관리자 인증 상태를 확인하는 중</p>
+      </section>
+    );
+  }
+
+  if (!authenticated) {
+    return (
+      <section className="panel admin-panel admin-login-panel" aria-labelledby="admin-login-title">
+        <div className="screen-heading">
+          <div>
+            <p className="eyebrow">관리자</p>
+            <h1 id="admin-login-title">관리자 인증</h1>
+            <p className="screen-description">어휘를 변경하거나 이미지 분석을 사용하려면 관리자 비밀번호가 필요합니다.</p>
+          </div>
+          <button className="secondary-button" type="button" onClick={onBack}>← 홈으로</button>
+        </div>
+        <form className="admin-login-form" onSubmit={handleAdminLogin}>
+          <label className="field-label" htmlFor="admin-password">
+            <span>관리자 비밀번호</span>
+            <input
+              autoComplete="current-password"
+              autoFocus
+              id="admin-password"
+              type="password"
+              value={adminPassword}
+              onChange={(event) => setAdminPassword(event.target.value)}
+            />
+          </label>
+          {authError && <ErrorMessage message={authError} />}
+          <button className="primary-button" disabled={authLoading || !adminPassword} type="submit">
+            관리자 페이지 열기
+          </button>
+        </form>
+      </section>
+    );
   }
 
   return (
@@ -1335,6 +1418,9 @@ function AdminImageVocabularyScreen({ onBack }) {
         </div>
         <button className="secondary-button" disabled={loading || saving} type="button" onClick={onBack}>
           ← 홈으로
+        </button>
+        <button className="secondary-button" disabled={loading || saving} type="button" onClick={handleAdminLogout}>
+          로그아웃
         </button>
       </div>
 
@@ -1978,6 +2064,12 @@ function optionFeedbackLabel(option, optionIndex, selectedOptionId, feedback) {
 }
 
 function normalizeError(message) {
+  if (message.includes('Invalid admin password')) {
+    return '관리자 비밀번호가 올바르지 않습니다.';
+  }
+  if (message.includes('Admin authentication is required')) {
+    return '관리자 인증이 필요합니다. 다시 로그인해 주세요.';
+  }
   if (message.includes('At least 4 vocabularies')) {
     return '4지선다 문제를 만들 수 있는 어휘가 부족합니다.';
   }

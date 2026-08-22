@@ -88,6 +88,13 @@ textarea:focus-visible {
   max-width: 1080px;
 }
 
+.admin-login-form {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 420px;
+  margin-top: var(--space-6);
+}
+
 .my-page-panel {
   max-width: 1100px;
 }

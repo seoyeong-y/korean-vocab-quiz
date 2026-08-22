@@ -2,6 +2,7 @@ package com.koreanvocabquiz.common;
 
 import java.util.List;
 
+import com.koreanvocabquiz.admin.AdminAuthenticationException;
 import com.koreanvocabquiz.quiz.QuizGenerationException;
 import com.koreanvocabquiz.quiz.QuizSubmissionException;
 import com.koreanvocabquiz.statistics.QuizHistoryCompletionException;
@@ -25,6 +26,16 @@ public class GlobalExceptionHandler {
                 .body(ApiErrorResponse.of(
                         HttpStatus.NOT_FOUND.value(),
                         HttpStatus.NOT_FOUND.getReasonPhrase(),
+                        List.of(exception.getMessage())
+                ));
+    }
+
+    @ExceptionHandler(AdminAuthenticationException.class)
+    public ResponseEntity<ApiErrorResponse> handleAdminAuthentication(AdminAuthenticationException exception) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiErrorResponse.of(
+                        HttpStatus.UNAUTHORIZED.value(),
+                        HttpStatus.UNAUTHORIZED.getReasonPhrase(),
                         List.of(exception.getMessage())
                 ));
     }
