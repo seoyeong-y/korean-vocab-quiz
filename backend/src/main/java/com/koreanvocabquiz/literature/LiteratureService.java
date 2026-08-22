@@ -29,15 +29,18 @@ public class LiteratureService {
     private final LiteraryAuthorRepository authorRepository;
     private final LiteraryWorkRepository workRepository;
     private final LiteraryFeatureRepository featureRepository;
+    private final LiteraryImageAnalysisClient imageAnalysisClient;
 
     public LiteratureService(
             LiteraryAuthorRepository authorRepository,
             LiteraryWorkRepository workRepository,
-            LiteraryFeatureRepository featureRepository
+            LiteraryFeatureRepository featureRepository,
+            LiteraryImageAnalysisClient imageAnalysisClient
     ) {
         this.authorRepository = authorRepository;
         this.workRepository = workRepository;
         this.featureRepository = featureRepository;
+        this.imageAnalysisClient = imageAnalysisClient;
     }
 
     public List<LiteraryAuthorResponse> authors() {
@@ -132,6 +135,79 @@ public class LiteratureService {
     public LiteraryCsvPreviewResponse previewCsv(MultipartFile file) {
         List<LiteraryCsvRowResponse> rows = parseCsv(file);
         return new LiteraryCsvPreviewResponse(rows.size(), rows);
+    }
+
+    public LiteraryImageExtractionResponse extractFromImages(List<MultipartFile> files) {
+        if (files == null || files.isEmpty()) throw new LiteraryImageAnalysisException("At least one image file is required.");
+        if (files.size() > 5) throw new LiteraryImageAnalysisException("Up to 5 images can be uploaded at once.");
+        long totalSize = files.stream().filter(file -> file != null).mapToLong(MultipartFile::getSize).sum();
+        if (totalSize > 50 * 1024 * 1024) throw new LiteraryImageAnalysisException("Total image upload size must be 50MB or less.");
+
+        List<LiteraryImageFile> images = new ArrayList<>();
+        for (int index = 0; index < files.size(); index++) {
+            MultipartFile file = files.get(index);
+            validateImage(file);
+            try {
+                images.add(new LiteraryImageFile(index + 1, file.getContentType().toLowerCase(), file.getBytes()));
+            } catch (IOException exception) {
+                throw new LiteraryImageAnalysisException("Failed to read uploaded image.", exception);
+            }
+        }
+
+        List<ImageDraftRow> draftRows = new ArrayList<>();
+        int rowNumber = 1;
+        for (LiteraryImageAnalysisResult result : imageAnalysisClient.extract(images)) {
+            for (LiteraryImageAuthorDraft authorDraft : result.authors()) {
+                String author = normalizeAuthor(authorDraft.name());
+                for (String work : authorDraft.works()) {
+                    String normalizedWork = normalizeWork(work);
+                    if (!author.isBlank() && !normalizedWork.isBlank()) {
+                        LiteraryCsvRowRequest row = new LiteraryCsvRowRequest(rowNumber, true, author, normalizedWork, null, null);
+                        draftRows.add(new ImageDraftRow(result.imageNumber(), rowNumber++, row, false));
+                    }
+                }
+                for (LiteraryImageFeatureDraft feature : authorDraft.features()) {
+                    LiteratureFeatureType type = parseNullableFeatureType(feature.type());
+                    String work = feature.workTitle() == null ? null : normalizeWork(feature.workTitle());
+                    LiteraryCsvRowRequest row = new LiteraryCsvRowRequest(rowNumber, true, author, work, feature.content().trim(), type);
+                    draftRows.add(new ImageDraftRow(result.imageNumber(), rowNumber++, row, feature.needsReview()));
+                }
+            }
+        }
+        if (draftRows.isEmpty()) throw new LiteraryImageAnalysisException("No literary entries were found in the images.");
+
+        List<LiteraryCsvRowResponse> previewRows = previewRows(draftRows.stream().map(ImageDraftRow::row).toList());
+        List<LiteraryImageCandidateResponse> candidates = new ArrayList<>();
+        for (int index = 0; index < draftRows.size(); index++) {
+            ImageDraftRow draft = draftRows.get(index);
+            LiteraryCsvRowResponse preview = previewRows.get(index);
+            String featureType = preview.featureType() == null
+                    ? (preview.feature() == null ? null : "UNRESOLVED")
+                    : preview.featureType().name();
+            candidates.add(new LiteraryImageCandidateResponse(
+                    draft.imageNumber(), preview.rowNumber(), preview.author(), preview.work(), preview.feature(), featureType,
+                    preview.status(), preview.reason(), draft.needsReview() || "NEEDS_REVIEW".equals(preview.status())
+            ));
+        }
+        return new LiteraryImageExtractionResponse(candidates.size(), candidates);
+    }
+
+    public List<LiteraryCsvRowResponse> previewRows(List<LiteraryCsvRowRequest> rows) {
+        List<LiteraryCsvRowResponse> results = new ArrayList<>();
+        Set<String> seenWorks = new HashSet<>();
+        Set<String> seenFeatures = new HashSet<>();
+        for (LiteraryCsvRowRequest row : rows) {
+            RowValidation validation = validateRow(cleanNullable(row.author()), cleanNullable(row.work()), cleanNullable(row.feature()), row.featureType());
+            String status = validation.status();
+            String reason = validation.reason();
+            if (validation.valid() && isDuplicate(validation, seenWorks, seenFeatures)) {
+                status = "DUPLICATE";
+                reason = "같은 데이터가 이미 존재합니다.";
+            }
+            if (validation.valid()) markSeen(validation, seenWorks, seenFeatures);
+            results.add(new LiteraryCsvRowResponse(row.rowNumber(), validation.author(), validation.work(), validation.feature(), validation.type(), status, reason));
+        }
+        return results;
     }
 
     @Transactional
@@ -261,6 +337,39 @@ public class LiteratureService {
         return new LiteraryFeatureInput(author, work, type, cleanContent);
     }
 
+    private void validateImage(MultipartFile file) {
+        if (file == null || file.isEmpty()) throw new LiteraryImageAnalysisException("Image file is required.");
+        if (file.getSize() > 10 * 1024 * 1024) throw new LiteraryImageAnalysisException("Image file size must be 10MB or less.");
+        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase();
+        if (!Set.of("image/jpeg", "image/png", "image/webp").contains(contentType)) {
+            throw new LiteraryImageAnalysisException("Only jpg, jpeg, png, and webp images are supported.");
+        }
+    }
+
+    private String normalizeAuthor(String value) {
+        return value == null ? "" : value.trim().replaceFirst("\\s*[（(][^()（）]*[)）]\\s*$", "").trim();
+    }
+
+    private String normalizeWork(String value) {
+        if (value == null) return "";
+        String normalized = value.trim();
+        if ((normalized.startsWith("<") && normalized.endsWith(">"))
+                || (normalized.startsWith("〈") && normalized.endsWith("〉"))
+                || (normalized.startsWith("《") && normalized.endsWith("》"))) {
+            normalized = normalized.substring(1, normalized.length() - 1).trim();
+        }
+        return normalized;
+    }
+
+    private LiteratureFeatureType parseNullableFeatureType(String type) {
+        if (type == null || type.isBlank() || "UNRESOLVED".equalsIgnoreCase(type)) return null;
+        return switch (type.toUpperCase()) {
+            case "WORK" -> LiteratureFeatureType.WORK;
+            case "AUTHOR" -> LiteratureFeatureType.AUTHOR;
+            default -> throw new LiteraryImageAnalysisException("AI response contains an invalid feature type.");
+        };
+    }
+
     private boolean featureExists(LiteraryFeatureInput input) { return featureExists(input.author().getId(), input.work() == null ? null : input.work().getId(), input.type(), input.content()); }
     private boolean featureExistsExcept(LiteraryFeatureInput input, Long id) { return featureRepository.existsByAuthorIdAndWorkIdAndContentAndIdNot(input.author().getId(), input.work() == null ? null : input.work().getId(), input.content(), id); }
     private boolean featureExists(String author, String work, LiteratureFeatureType type, String content) { return featureExists(authorId(author), work == null ? null : workId(author, work), type, content); }
@@ -280,6 +389,7 @@ public class LiteratureService {
     private LiteraryCsvRowResponse result(LiteraryCsvRowRequest row, String status, String reason) { return new LiteraryCsvRowResponse(row.rowNumber(), row.author(), row.work(), row.feature(), row.featureType(), status, reason); }
 
     private record LiteraryFeatureInput(LiteraryAuthor author, LiteraryWork work, LiteratureFeatureType type, String content) {}
+    private record ImageDraftRow(int imageNumber, int rowNumber, LiteraryCsvRowRequest row, boolean needsReview) {}
     private record RowValidation(boolean valid, String status, String reason, String author, String work, String feature, LiteratureFeatureType type) {}
     private record ImportResult(boolean skipped) {}
 }

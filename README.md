@@ -775,9 +775,13 @@ GET    /api/literature/features
 POST   /api/literature/features
 PUT    /api/literature/features/{id}
 DELETE /api/literature/features/{id}
+POST   /api/literature/image/extract
+POST   /api/literature/image/import
 POST   /api/literature/csv/preview
 POST   /api/literature/csv/import
 ```
+
+문학 관리자 화면에서는 JPG/JPEG/PNG/WEBP 사진을 최대 5장까지 업로드할 수 있습니다. 이미지 한 장은 10MB 이하, 한 요청은 50MB 이하입니다. `/api/literature/image/extract`는 기존 Gemini 설정(`GEMINI_API_KEY`, `GEMINI_MODEL`)으로 사진을 분석하지만 DB에는 저장하지 않고 Preview 후보만 반환합니다. `/api/literature/image/import`는 관리자가 수정·선택한 행만 기존 문학 중복/검증 로직으로 저장합니다. WORK/AUTHOR를 확정하지 않은 `UNRESOLVED` 특징은 검수 화면에서 확인하기 전까지 저장 대상이 될 수 없습니다.
 
 CSV 헤더는 `author,work,feature,feature_type` 순서여야 합니다.
 

@@ -5,6 +5,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
 
 import com.koreanvocabquiz.common.ResourceNotFoundException;
 
@@ -12,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
@@ -33,6 +38,7 @@ class LiteratureControllerTest {
     @Autowired private LiteraryFeatureRepository featureRepository;
     @Autowired private LiteraryWorkRepository workRepository;
     @Autowired private LiteraryAuthorRepository authorRepository;
+    @MockBean private LiteraryImageAnalysisClient imageAnalysisClient;
 
     @BeforeEach
     void setUp() {
@@ -164,5 +170,25 @@ class LiteratureControllerTest {
                 .andExpect(jsonPath("$.successCount").value(2))
                 .andExpect(jsonPath("$.skippedCount").value(1))
                 .andExpect(jsonPath("$.failedCount").value(0));
+    }
+
+    @Test
+    void literaryImageExtractionNormalizesAuthorAndWorkWithoutSaving() throws Exception {
+        when(imageAnalysisClient.extract(any())).thenReturn(List.of(new LiteraryImageAnalysisResult(1, List.of(
+                new LiteraryImageAuthorDraft("현진건(소설)", List.of("<운수 좋은 날>", "〈빈처〉"), List.of(
+                        new LiteraryImageFeatureDraft("WORK", "운수 좋은 날", "작품 특징", false),
+                        new LiteraryImageFeatureDraft("UNRESOLVED", null, "작가 설명", true)
+                ))
+        ))));
+        MockMultipartFile image = new MockMultipartFile("files", "page.jpg", "image/jpeg", "image".getBytes());
+
+        mockMvc.perform(multipart("/api/literature/image/extract").file(image))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(4))
+                .andExpect(jsonPath("$.rows[0].author").value("현진건"))
+                .andExpect(jsonPath("$.rows[0].work").value("운수 좋은 날"))
+                .andExpect(jsonPath("$.rows[2].featureType").value("WORK"))
+                .andExpect(jsonPath("$.rows[3].featureType").value("UNRESOLVED"));
+        org.junit.jupiter.api.Assertions.assertEquals(0, authorRepository.count());
     }
 }

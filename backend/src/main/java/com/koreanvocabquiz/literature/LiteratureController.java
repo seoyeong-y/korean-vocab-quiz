@@ -71,6 +71,14 @@ public class LiteratureController {
     @PostMapping(value = "/csv/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public LiteraryCsvPreviewResponse previewCsv(@RequestPart("file") MultipartFile file) { return service.previewCsv(file); }
 
+    @PostMapping(value = "/image/extract", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public LiteraryImageExtractionResponse extractFromImages(@RequestPart("files") List<MultipartFile> files) {
+        return service.extractFromImages(files);
+    }
+
     @PostMapping("/csv/import")
     public LiteraryCsvImportResponse importCsv(@Valid @RequestBody LiteraryCsvImportRequest request) { return service.importCsv(request); }
+
+    @PostMapping("/image/import")
+    public LiteraryCsvImportResponse importImageRows(@Valid @RequestBody LiteraryCsvImportRequest request) { return service.importCsv(request); }
 }

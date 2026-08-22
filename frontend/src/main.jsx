@@ -23,8 +23,10 @@ import {
   getLiteraryAuthors,
   getLiteraryFeatures,
   getLiteraryWorks,
+  extractLiteraryImages,
   importLiteraryCsv,
   previewLiteraryCsv,
+  saveLiteraryImageBatch,
   submitLiteraryQuizAnswer,
   updateLiteraryAuthor,
   updateLiteraryFeature,
@@ -347,20 +349,23 @@ function App() {
     }
   }
 
-  async function handleStartLiterary(event) {
-    event.preventDefault();
+  async function handleStartLiterary(event, requestedType) {
+    event?.preventDefault();
+    const quizType = requestedType || literarySettings.quizType;
+    const questionCount = Number(settings.questionCount);
     setLoading(true);
     setError('');
     try {
-      const quiz = await createLiteraryQuiz({ ...literarySettings, questionCount: Number(literarySettings.questionCount) });
+      const quiz = await createLiteraryQuiz({ quizType, questionCount });
       if (!Array.isArray(quiz) || quiz.length === 0) throw new Error('생성된 작가·작품 퀴즈가 없습니다. 문학 데이터를 먼저 등록해 주세요.');
+      setLiterarySettings({ quizType, questionCount });
       setLiteraryQuestions(quiz);
       setLiteraryAnswers({});
       setLiteraryIndex(0);
       setScreen('literaryQuiz');
     } catch (literaryError) {
       setError(normalizeError(literaryError.message));
-      setScreen('literaryStart');
+      setScreen('start');
     } finally {
       setLoading(false);
     }
@@ -387,7 +392,7 @@ function App() {
     setLiteraryQuestions([]);
     setLiteraryAnswers({});
     setLiteraryIndex(0);
-    setScreen('literaryStart');
+    setScreen('start');
     setError('');
   }
 
@@ -670,16 +675,12 @@ function App() {
           onOpenWrongAnswers={loadWrongAnswers}
           onOpenMyPage={loadMyPage}
           onOpenAdmin={() => setScreen('admin')}
-          onOpenLiterature={() => setScreen('literaryStart')}
+          onStartLiterary={(type) => handleStartLiterary(null, type)}
         />
       )}
 
       {screen === 'admin' && (
         <AdminImageVocabularyScreen onBack={handleRetry} onOpenLiterature={() => setScreen('literaryAdmin')} />
-      )}
-
-      {screen === 'literaryStart' && (
-        <LiteraryStartScreen settings={literarySettings} loading={loading} error={error} onChange={setLiterarySettings} onStart={handleStartLiterary} onBack={handleRetry} onAdmin={() => setScreen('literaryAdmin')} />
       )}
 
       {screen === 'literaryAdmin' && <LiteratureAdminScreen onBack={handleRetry} />}
@@ -783,7 +784,7 @@ function StartScreen({
   onOpenWrongAnswers,
   onOpenMyPage,
   onOpenAdmin,
-  onOpenLiterature,
+  onStartLiterary,
 }) {
   const questionCountValue = Number(settings.questionCount);
   const [selectedQuestionCountOption, setSelectedQuestionCountOption] = React.useState(() => (
@@ -861,6 +862,23 @@ function StartScreen({
             ))}
           </div>
           {availabilityError && <p className="field-hint availability-error">{availabilityError}</p>}
+        </fieldset>
+
+        <fieldset>
+          <legend>
+            <span>문학 퀴즈</span>
+            <small>작품이나 작가를 바로 선택해 시작하세요.</small>
+          </legend>
+          <div className="literary-quick-grid">
+            <button className="choice literary-quick-button" disabled={loading} type="button" onClick={() => onStartLiterary('WORK_GUESS')}>
+              <strong>작품 맞히기</strong>
+              <small>작가와 특징을 보고 작품을 고릅니다.</small>
+            </button>
+            <button className="choice literary-quick-button" disabled={loading} type="button" onClick={() => onStartLiterary('AUTHOR_GUESS')}>
+              <strong>작가 맞히기</strong>
+              <small>작품과 특징을 보고 작가를 고릅니다.</small>
+            </button>
+          </div>
         </fieldset>
 
         <fieldset>
@@ -971,9 +989,6 @@ function StartScreen({
         </div>
 
         <div className="admin-link-row">
-          <button className="secondary-button subtle-button" disabled={loading} type="button" onClick={onOpenLiterature}>
-            작가·작품 퀴즈
-          </button>
           <button className="secondary-button subtle-button" disabled={loading} type="button" onClick={onOpenAdmin}>
             관리자 이미지 추출
           </button>
@@ -2263,6 +2278,11 @@ function LiteratureAdminScreen({ onBack }) {
   const [featureForm, setFeatureForm] = React.useState({ authorId: '', workId: '', type: 'WORK', content: '' });
   const [csvRows, setCsvRows] = React.useState([]);
   const [csvResult, setCsvResult] = React.useState(null);
+  const [imageFiles, setImageFiles] = React.useState([]);
+  const [imageRows, setImageRows] = React.useState([]);
+  const [imageResult, setImageResult] = React.useState(null);
+  const [imageLoading, setImageLoading] = React.useState(false);
+  const [imageSaving, setImageSaving] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
 
@@ -2292,6 +2312,70 @@ function LiteratureAdminScreen({ onBack }) {
   async function createFeature(event) { event.preventDefault(); await run(async () => { await createLiteraryFeature({ authorId: Number(featureForm.authorId), workId: featureForm.type === 'WORK' ? Number(featureForm.workId) : null, type: featureForm.type, content: featureForm.content }); setFeatureForm((value) => ({ ...value, content: '' })); }); }
   async function preview(event) { const file = event.target.files?.[0]; if (!file) return; try { const result = await previewLiteraryCsv(file); setCsvRows((result.rows || []).map((row) => ({ ...row, selected: row.status !== 'ERROR' }))); setCsvResult(null); } catch (csvError) { setError(normalizeError(csvError.message)); } }
   async function importRows() { try { const result = await importLiteraryCsv(csvRows); setCsvResult(result); await refresh(); } catch (csvError) { setError(normalizeError(csvError.message)); } }
+  function handleImageFiles(event) {
+    const selectedFiles = Array.from(event.target.files || []);
+    const validationMessage = validateImageFiles(selectedFiles);
+    if (validationMessage) {
+      setImageFiles([]);
+      setImageRows([]);
+      setError(validationMessage);
+      event.target.value = '';
+      return;
+    }
+    setImageFiles(selectedFiles);
+    setImageRows([]);
+    setImageResult(null);
+    setError('');
+  }
+  async function extractLiteratureImages() {
+    setImageLoading(true);
+    setImageResult(null);
+    setError('');
+    try {
+      const result = await extractLiteraryImages(imageFiles);
+      setImageRows((result.rows || []).map((row, index) => ({
+        ...row,
+        localId: `literary-image-${row.rowNumber}-${index}`,
+        selected: row.status === 'NORMAL' && row.featureType !== 'UNRESOLVED',
+      })));
+    } catch (extractError) {
+      if (extractError.message.includes('Admin authentication is required')) setAuthenticated(false);
+      setError(normalizeError(extractError.message));
+    } finally {
+      setImageLoading(false);
+    }
+  }
+  function updateImageRow(localId, field, value) {
+    setImageRows((rows) => rows.map((row) => row.localId === localId ? { ...row, [field]: value } : row));
+  }
+  async function saveImageRows() {
+    const selectedRows = imageRows.filter((row) => row.selected);
+    setImageSaving(true);
+    setImageResult(null);
+    setError('');
+    try {
+      const result = await saveLiteraryImageBatch(selectedRows.map((row) => ({
+        rowNumber: row.rowNumber,
+        selected: true,
+        author: row.author,
+        work: row.work,
+        feature: row.feature,
+        featureType: row.featureType === 'UNRESOLVED' ? null : row.featureType,
+      })));
+      setImageResult({
+        ...result,
+        sourceItems: selectedRows,
+        skippedRows: result.rows?.filter((row) => row.status === 'DUPLICATE'),
+        failedRows: result.rows?.filter((row) => row.status === 'ERROR'),
+      });
+      await refresh();
+    } catch (saveError) {
+      if (saveError.message.includes('Admin authentication is required')) setAuthenticated(false);
+      setError(normalizeError(saveError.message));
+    } finally {
+      setImageSaving(false);
+    }
+  }
 
   if (authenticated === null || loading) return <section className="panel admin-panel"><p className="status-message">문학 관리자 화면을 불러오는 중</p></section>;
   if (!authenticated) return <section className="panel admin-panel admin-login-panel"><div className="screen-heading"><div><p className="eyebrow">관리자</p><h1>작가·작품 관리</h1><p className="screen-description">문학 데이터 변경에는 관리자 인증이 필요합니다.</p></div><button className="secondary-button" type="button" onClick={onBack}>← 홈으로</button></div><form className="admin-login-form" onSubmit={login}><label className="field-label"><span>관리자 비밀번호</span><input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>{authError && <ErrorMessage message={authError} />}<button className="primary-button" disabled={!password} type="submit">관리자 페이지 열기</button></form></section>;
@@ -2304,6 +2388,22 @@ function LiteratureAdminScreen({ onBack }) {
       <form className="admin-form-block" onSubmit={createWork}><h2>작품 등록</h2><label className="field-label"><span>작가</span><select value={workForm.authorId} onChange={(event) => setWorkForm({ ...workForm, authorId: event.target.value })}>{authors.map((author) => <option key={author.id} value={author.id}>{author.name}</option>)}</select></label><label className="field-label"><span>작품명</span><input value={workForm.title} onChange={(event) => setWorkForm({ ...workForm, title: event.target.value })} required /></label><button className="primary-button" type="submit">작품 추가</button></form>
       <form className="admin-form-block" onSubmit={createFeature}><h2>특징 등록</h2><label className="field-label"><span>작가</span><select value={featureForm.authorId} onChange={(event) => setFeatureForm({ ...featureForm, authorId: event.target.value })}>{authors.map((author) => <option key={author.id} value={author.id}>{author.name}</option>)}</select></label><label className="field-label"><span>특징 종류</span><select value={featureForm.type} onChange={(event) => setFeatureForm({ ...featureForm, type: event.target.value, workId: '' })}><option value="WORK">작품 특징</option><option value="AUTHOR">작가 특징</option></select></label>{featureForm.type === 'WORK' && <label className="field-label"><span>작품</span><select value={featureForm.workId} onChange={(event) => setFeatureForm({ ...featureForm, workId: event.target.value })}>{works.filter((work) => String(work.authorId) === String(featureForm.authorId)).map((work) => <option key={work.id} value={work.id}>{work.title}</option>)}</select></label>}<label className="field-label"><span>특징</span><textarea rows="3" value={featureForm.content} onChange={(event) => setFeatureForm({ ...featureForm, content: event.target.value })} required /></label><button className="primary-button" type="submit">특징 추가</button></form>
     </div>
+    <section className="admin-data-section literature-image-section">
+      <h2>교재 사진에서 문학 데이터 추출</h2>
+      <p className="field-hint">사진에서 읽은 작가·작품·특징을 DB에 바로 저장하지 않고 먼저 검수합니다.</p>
+      <label className="file-drop-label" htmlFor="literature-image-files"><span>교재 사진 선택</span><small>jpg, jpeg, png, webp / 최대 5장 / 파일당 10MB / 전체 50MB</small><input id="literature-image-files" accept="image/jpeg,image/png,image/webp" multiple type="file" disabled={imageLoading || imageSaving} onChange={handleImageFiles} /></label>
+      <div className="admin-action-row"><button className="primary-button" type="button" disabled={imageLoading || imageSaving || imageFiles.length === 0} onClick={extractLiteratureImages}>{imageLoading ? '문학 데이터 추출 중' : '사진에서 문학 데이터 추출'}</button><span className="field-hint">{imageFiles.length}개 이미지 선택됨</span></div>
+      {imageLoading && <p className="status-message">Gemini가 사진을 분석하는 중입니다. 완료될 때까지 이 화면을 닫지 마세요.</p>}
+      {imageRows.length > 0 && <>
+        <div className="review-toolbar"><div><strong>추출 항목 {imageRows.length}개</strong><span>선택 {imageRows.filter((row) => row.selected).length}개</span></div><div className="action-row"><button className="secondary-button" type="button" disabled={imageSaving} onClick={() => setImageRows((rows) => rows.map((row) => ({ ...row, selected: row.featureType !== 'UNRESOLVED' })))}>전체 선택</button><button className="secondary-button" type="button" disabled={imageSaving} onClick={() => setImageRows((rows) => rows.map((row) => ({ ...row, selected: false })))}>전체 선택 해제</button></div></div>
+        <div className="literature-image-review-list">{imageRows.map((row) => <article className={`literature-image-review-row ${row.needsReview || row.featureType === 'UNRESOLVED' ? 'needs-review-row' : ''}`} key={row.localId}>
+          <div className="literature-image-review-meta"><label className="admin-checkbox"><input type="checkbox" checked={row.selected} disabled={imageSaving || row.featureType === 'UNRESOLVED'} onChange={(event) => updateImageRow(row.localId, 'selected', event.target.checked)} /> 저장</label><span className="category-badge">이미지 {row.imageNumber}</span><span className="review-badge">{row.featureType || '작품만 등록'}</span><span>{row.status} {row.reason && `· ${row.reason}`}</span></div>
+          <div className="admin-edit-grid"><label className="field-label"><span>작가</span><input value={row.author || ''} disabled={imageSaving} onChange={(event) => updateImageRow(row.localId, 'author', event.target.value)} /></label><label className="field-label"><span>작품</span><input value={row.work || ''} disabled={imageSaving} onChange={(event) => updateImageRow(row.localId, 'work', event.target.value)} /></label><label className="field-label"><span>특징</span><textarea rows="3" value={row.feature || ''} disabled={imageSaving} onChange={(event) => updateImageRow(row.localId, 'feature', event.target.value)} /></label><label className="field-label"><span>특징 종류</span><select value={row.featureType || 'UNRESOLVED'} disabled={imageSaving} onChange={(event) => { const featureType = event.target.value === 'UNRESOLVED' ? null : event.target.value; updateImageRow(row.localId, 'featureType', featureType); updateImageRow(row.localId, 'needsReview', !featureType); updateImageRow(row.localId, 'status', featureType ? 'NORMAL' : 'NEEDS_REVIEW'); }}><option value="UNRESOLVED">확인 필요</option><option value="WORK">작품 특징</option><option value="AUTHOR">작가 특징</option></select></label></div>
+        </article>)}</div>
+        <button className="primary-button" type="button" disabled={imageSaving || imageRows.filter((row) => row.selected).length === 0} onClick={saveImageRows}>{imageSaving ? '저장 중' : '검수 완료 및 저장'}</button>
+      </>}
+      {imageResult && <BatchSaveResult result={imageResult} />}
+    </section>
     <section className="admin-data-section"><h2>CSV Preview / Import</h2><label className="file-drop-label"><span>CSV 선택</span><small>author,work,feature,feature_type / 최대 5MB</small><input type="file" accept=".csv,text/csv" onChange={preview} /></label>{csvRows.length > 0 && <><p className="field-hint">전체 {csvRows.length}행 · 선택 {csvRows.filter((row) => row.selected).length}행</p><div className="literature-csv-list">{csvRows.map((row, index) => <div className={`literature-csv-row ${row.status !== 'NORMAL' ? 'needs-review-row' : ''}`} key={`${row.rowNumber}-${index}`}><input type="checkbox" checked={row.selected} onChange={(event) => setCsvRows((rows) => rows.map((item, itemIndex) => itemIndex === index ? { ...item, selected: event.target.checked } : item))} /><input value={row.author || ''} onChange={(event) => setCsvRows((rows) => rows.map((item, itemIndex) => itemIndex === index ? { ...item, author: event.target.value } : item))} /><input value={row.work || ''} onChange={(event) => setCsvRows((rows) => rows.map((item, itemIndex) => itemIndex === index ? { ...item, work: event.target.value } : item))} /><input value={row.feature || ''} onChange={(event) => setCsvRows((rows) => rows.map((item, itemIndex) => itemIndex === index ? { ...item, feature: event.target.value } : item))} /><select value={row.featureType || ''} onChange={(event) => setCsvRows((rows) => rows.map((item, itemIndex) => itemIndex === index ? { ...item, featureType: event.target.value || null, status: event.target.value ? 'NORMAL' : 'NEEDS_REVIEW' } : item))}><option value="">확인 필요</option><option value="WORK">WORK</option><option value="AUTHOR">AUTHOR</option></select><span>{row.status} {row.reason && `· ${row.reason}`}</span></div>)}</div><button className="primary-button" type="button" disabled={!csvRows.some((row) => row.selected)} onClick={importRows}>검수 완료 및 저장</button></>}{csvResult && <BatchSaveResult result={{ ...csvResult, skippedRows: csvResult.rows?.filter((row) => row.status === 'DUPLICATE'), failedRows: csvResult.rows?.filter((row) => row.status === 'ERROR') }} />}</section>
     <section className="admin-data-section"><h2>작가</h2>{authors.map((author) => <div className="admin-list-row" key={author.id}><span>{author.name}</span><span><button className="secondary-button" type="button" onClick={() => editAuthor(author)}>수정</button><button className="danger-button quiet-danger" type="button" onClick={() => remove(() => deleteLiteraryAuthor(author.id))}>삭제</button></span></div>)}</section>
     <section className="admin-data-section"><h2>작품</h2>{works.map((work) => <div className="admin-list-row" key={work.id}><span>{work.authorName} · {work.title}</span><span><button className="secondary-button" type="button" onClick={() => editWork(work)}>수정</button><button className="danger-button quiet-danger" type="button" onClick={() => remove(() => deleteLiteraryWork(work.id))}>삭제</button></span></div>)}</section>

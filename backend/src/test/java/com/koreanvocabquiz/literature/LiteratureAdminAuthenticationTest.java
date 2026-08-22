@@ -1,5 +1,6 @@
 package com.koreanvocabquiz.literature;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -8,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(properties = {
@@ -28,6 +30,13 @@ class LiteratureAdminAuthenticationTest {
         mockMvc.perform(post("/api/literature/authors")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"김유정\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void literatureImageExtractionRequiresAdminAuthentication() throws Exception {
+        MockMultipartFile image = new MockMultipartFile("files", "page.jpg", "image/jpeg", "not-an-image".getBytes());
+        mockMvc.perform(multipart("/api/literature/image/extract").file(image))
                 .andExpect(status().isUnauthorized());
     }
 }

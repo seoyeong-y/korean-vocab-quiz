@@ -187,6 +187,16 @@ export function importLiteraryCsv(rows) {
   return request('/api/literature/csv/import', { method: 'POST', body: JSON.stringify({ rows }) });
 }
 
+export function extractLiteraryImages(files) {
+  const formData = new FormData();
+  files.forEach((file) => formData.append('files', file));
+  return request('/api/literature/image/extract', { method: 'POST', headers: {}, body: formData });
+}
+
+export function saveLiteraryImageBatch(rows) {
+  return request('/api/literature/image/import', { method: 'POST', body: JSON.stringify({ rows }) });
+}
+
 export function getLiteraryQuizAvailability() {
   return request('/api/literature/quizzes/availability');
 }
