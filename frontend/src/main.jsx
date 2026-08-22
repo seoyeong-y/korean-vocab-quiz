@@ -669,16 +669,30 @@ function StartScreen({ settings, loading, error, onChange, onStart, onOpenWrongA
 }
 
 function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, error, onBack, onRefresh }) {
+  const PAGE_SIZE = 5;
   const total = dashboard?.total || emptyLearningSummary();
   const today = dashboard?.today || emptyLearningSummary();
   const categoryStats = dashboard?.categories || [];
-  const modeStats = dashboard?.modes || [];
   const recentHistories = dashboard?.recentHistories || [];
   const mostWrongVocabularies = dashboard?.mostWrongVocabularies || [];
   const vocabularyProgresses = dashboard?.vocabularyProgresses || [];
   const totalVocabularyCount = dashboard?.totalVocabularyCount || 0;
   const attemptedVocabularyCount = dashboard?.attemptedVocabularyCount || 0;
   const vocabularyCounts = dashboard?.vocabularyCounts || [];
+  const [recentPage, setRecentPage] = React.useState(0);
+  const [wrongPage, setWrongPage] = React.useState(0);
+  const [progressPage, setProgressPage] = React.useState(0);
+  const [masteredPage, setMasteredPage] = React.useState(0);
+
+  React.useEffect(() => setRecentPage(0), [dashboard]);
+  React.useEffect(() => setWrongPage(0), [wrongAnswers]);
+  React.useEffect(() => setProgressPage(0), [dashboard]);
+  React.useEffect(() => setMasteredPage(0), [masteredVocabularies]);
+
+  const recentItems = paginate(recentHistories, recentPage, PAGE_SIZE);
+  const wrongItems = paginate(wrongAnswers, wrongPage, PAGE_SIZE);
+  const progressItems = paginate(vocabularyProgresses, progressPage, PAGE_SIZE);
+  const masteredItems = paginate(masteredVocabularies, masteredPage, PAGE_SIZE);
 
   return (
     <section className="panel my-page-panel" aria-labelledby="my-page-title">
@@ -719,10 +733,6 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
         </section>
         <dl className="stat-card-grid">
           <div>
-            <dt>풀어본 어휘</dt>
-            <dd>{attemptedVocabularyCount} / {totalVocabularyCount}</dd>
-          </div>
-          <div>
             <dt>누적 풀이</dt>
             <dd>{total.totalQuestionCount}</dd>
           </div>
@@ -740,6 +750,14 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
           </div>
         </dl>
       </div>
+
+      <section className="dashboard-section vocabulary-coverage" aria-labelledby="vocabulary-coverage-title">
+        <div className="section-title-row">
+          <h2 id="vocabulary-coverage-title">어휘 학습 진행</h2>
+          <strong>{attemptedVocabularyCount} / {totalVocabularyCount}개</strong>
+        </div>
+        <p>전체 어휘 중 학습한 어휘 수입니다.</p>
+      </section>
 
       <section className="dashboard-section" aria-labelledby="today-title">
         <div className="section-title-row">
@@ -785,24 +803,6 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
         </div>
       </section>
 
-      <section className="dashboard-section" aria-labelledby="mode-stat-title">
-        <div className="section-title-row">
-          <h2 id="mode-stat-title">퀴즈 모드별</h2>
-        </div>
-        <div className="stat-row-list">
-          {modeStats.map((stat) => (
-            <StatRow
-              key={stat.mode}
-              label={modeLabel(stat.mode)}
-              total={stat.totalQuestionCount}
-              correct={stat.correctCount}
-              incorrect={stat.incorrectCount}
-              accuracy={stat.accuracy}
-            />
-          ))}
-        </div>
-      </section>
-
       <section className="dashboard-section" aria-labelledby="most-wrong-title">
         <div className="section-title-row">
           <h2 id="most-wrong-title">많이 틀린 어휘</h2>
@@ -831,6 +831,7 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
       <section className="dashboard-section" aria-labelledby="recent-history-title">
         <div className="section-title-row">
           <h2 id="recent-history-title">최근 학습</h2>
+          <span>{recentHistories.length}개</span>
         </div>
         {recentHistories.length === 0 ? (
           <div className="empty-state compact-empty-state">
@@ -839,7 +840,7 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
           </div>
         ) : (
           <div className="history-list">
-            {recentHistories.map((history) => (
+            {recentItems.map((history) => (
               <article className="history-item" key={history.id}>
                 <time>{formatDateTime(history.completedAt)}</time>
                 <span>{categoryLabel(history.category)}</span>
@@ -849,6 +850,7 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
             ))}
           </div>
         )}
+        <Pagination page={recentPage} totalCount={recentHistories.length} pageSize={PAGE_SIZE} onChange={setRecentPage} />
       </section>
 
       <section className="dashboard-section" aria-labelledby="my-wrong-title">
@@ -863,7 +865,7 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
           </div>
         ) : (
           <div className="learning-word-list" role="list">
-            {wrongAnswers.map((item) => (
+            {wrongItems.map((item) => (
               <LearningWordItem
                 key={item.id}
                 category={item.category}
@@ -874,12 +876,13 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
             ))}
           </div>
         )}
+        <Pagination page={wrongPage} totalCount={wrongAnswers.length} pageSize={PAGE_SIZE} onChange={setWrongPage} />
       </section>
 
       <section className="dashboard-section" aria-labelledby="vocabulary-progress-title">
         <div className="section-title-row">
           <h2 id="vocabulary-progress-title">풀어본 어휘</h2>
-          <span>{vocabularyProgresses.length}개</span>
+          <span>{attemptedVocabularyCount} / {totalVocabularyCount}개</span>
         </div>
         {vocabularyProgresses.length === 0 ? (
           <div className="empty-state compact-empty-state">
@@ -888,7 +891,7 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
           </div>
         ) : (
           <div className="learning-word-list" role="list">
-            {vocabularyProgresses.map((item) => (
+            {progressItems.map((item) => (
               <LearningWordItem
                 key={item.vocabularyId}
                 category={item.category}
@@ -899,6 +902,7 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
             ))}
           </div>
         )}
+        <Pagination page={progressPage} totalCount={vocabularyProgresses.length} pageSize={PAGE_SIZE} onChange={setProgressPage} />
       </section>
 
       <section className="dashboard-section" aria-labelledby="mastered-title">
@@ -913,7 +917,7 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
           </div>
         ) : (
           <div className="learning-word-list" role="list">
-            {masteredVocabularies.map((item) => (
+            {masteredItems.map((item) => (
               <LearningWordItem
                 key={item.id}
                 category={item.category}
@@ -924,8 +928,43 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
             ))}
           </div>
         )}
+        <Pagination page={masteredPage} totalCount={masteredVocabularies.length} pageSize={PAGE_SIZE} onChange={setMasteredPage} />
       </section>
     </section>
+  );
+}
+
+function paginate(items, page, pageSize) {
+  return items.slice(page * pageSize, (page + 1) * pageSize);
+}
+
+function Pagination({ page, totalCount, pageSize, onChange }) {
+  const pageCount = Math.ceil(totalCount / pageSize);
+
+  if (pageCount <= 1) {
+    return null;
+  }
+
+  return (
+    <nav className="pagination" aria-label="목록 페이지 이동">
+      <button
+        className="secondary-button"
+        disabled={page === 0}
+        type="button"
+        onClick={() => onChange(page - 1)}
+      >
+        이전
+      </button>
+      <span>{page + 1} / {pageCount}</span>
+      <button
+        className="secondary-button"
+        disabled={page === pageCount - 1}
+        type="button"
+        onClick={() => onChange(page + 1)}
+      >
+        다음
+      </button>
+    </nav>
   );
 }
 

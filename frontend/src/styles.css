@@ -833,6 +833,31 @@ dd {
   padding: var(--space-5);
 }
 
+.vocabulary-coverage p {
+  color: var(--color-muted);
+  margin: 0;
+}
+
+.vocabulary-coverage strong {
+  color: var(--color-primary);
+  font-size: 20px;
+}
+
+.pagination {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+  margin-top: var(--space-1);
+}
+
+.pagination span {
+  color: var(--color-muted);
+  font-size: 14px;
+  min-width: 58px;
+  text-align: center;
+}
+
 .section-title-row {
   align-items: center;
   display: flex;
