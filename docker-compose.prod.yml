@@ -9,7 +9,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
       TZ: Asia/Seoul
     volumes:
-      - mysql-prod-data:/var/lib/mysql
+      - mysql-data:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
       interval: 10s
@@ -65,7 +65,9 @@ services:
       - korean-vocab-network
 
 volumes:
-  mysql-prod-data:
+  # Keep the existing local Compose database when production Compose is run
+  # from this repository directory.
+  mysql-data:
 
 networks:
   korean-vocab-network:

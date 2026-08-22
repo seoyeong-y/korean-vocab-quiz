@@ -127,7 +127,7 @@ docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs -f backend
 ```
 
-브라우저에서는 `http://<domain-or-ec2-address>`로 접속합니다. MySQL 데이터는 `mysql-prod-data` Docker volume에 저장되므로 컨테이너 재생성 후에도 유지됩니다. 데이터 손실을 막으려면 EC2 운영 전에 volume 백업 절차를 별도로 마련해야 합니다.
+브라우저에서는 `http://<domain-or-ec2-address>`로 접속합니다. 현재 production Compose도 기존 로컬 Compose와 동일한 `mysql-data` Docker volume을 사용하므로, 이 저장소에서 두 Compose를 전환해 실행할 때 같은 MySQL 데이터를 조회합니다. 데이터 손실을 막으려면 EC2 운영 전에 volume 백업 절차를 별도로 마련해야 합니다.
 
 EC2 Security Group은 기본적으로 `22`(관리자 SSH), `80`(HTTP), `443`(HTTPS)만 허용하고 `3306`, `5173`, `8080`은 열지 않습니다. HTTPS가 필요하면 별도의 TLS 인증서와 reverse proxy 구성을 추가해야 합니다.
 
