@@ -127,7 +127,31 @@ docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs -f backend
 ```
 
-브라우저에서는 `http://<domain-or-ec2-address>`로 접속합니다. 현재 production Compose도 기존 로컬 Compose와 동일한 `mysql-data` Docker volume을 사용하므로, 이 저장소에서 두 Compose를 전환해 실행할 때 같은 MySQL 데이터를 조회합니다. 데이터 손실을 막으려면 EC2 운영 전에 volume 백업 절차를 별도로 마련해야 합니다.
+브라우저에서는 `http://<domain-or-ec2-address>`로 접속합니다.
+
+MySQL은 `docker-compose.prod.yml`의 Compose 관리 named volume인 `mysql-data`에 저장됩니다. `external: true`나 호스트의 절대 경로를 사용하지 않으므로, 새 EC2에서 처음 실행하면 해당 Compose 프로젝트 전용 volume이 자동으로 생성됩니다. 로컬에서 이 저장소의 기본 프로젝트명으로 실행하면 기존 `korean-vocab-quiz_mysql-data` volume을 재사용할 수 있지만, EC2는 별도 호스트이므로 로컬 volume에 의존하지 않습니다.
+
+로컬 데이터를 EC2로 이전할 때는 Docker volume 자체를 복사하지 말고 `mysqldump`와 import를 사용합니다.
+
+로컬에서 dump:
+
+```bash
+docker compose exec -T mysql sh -c \
+  'mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --single-transaction "$MYSQL_DATABASE"' \
+  > korean_vocab.sql
+```
+
+EC2에서 import:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d mysql
+docker compose -f docker-compose.prod.yml exec -T mysql sh -c \
+  'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < korean_vocab.sql
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+EC2에서는 `docker volume create`를 별도로 실행할 필요가 없습니다. 데이터 손실을 막으려면 `docker compose down -v`를 실행하지 말고, 운영 전후에 dump 백업을 별도로 보관하세요.
 
 EC2 Security Group은 기본적으로 `22`(관리자 SSH), `80`(HTTP), `443`(HTTPS)만 허용하고 `3306`, `5173`, `8080`은 열지 않습니다. HTTPS가 필요하면 별도의 TLS 인증서와 reverse proxy 구성을 추가해야 합니다.
 
