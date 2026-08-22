@@ -4,6 +4,8 @@ import java.util.List;
 
 import jakarta.validation.Valid;
 
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,5 +34,10 @@ public class QuizController {
     @PostMapping("/mastered")
     public QuizMasteredResponse markMastered(@Valid @RequestBody QuizMasteredRequest request) {
         return quizService.markMastered(request);
+    }
+
+    @DeleteMapping("/mastered/{questionId}")
+    public QuizMasteredResponse unmarkMastered(@PathVariable String questionId) {
+        return quizService.unmarkMastered(questionId);
     }
 }

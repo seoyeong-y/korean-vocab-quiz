@@ -633,6 +633,12 @@ dd {
   border-color: #e7c969;
 }
 
+.mastered-button.selected {
+  background: #fff7df;
+  border-color: #d8ad27;
+  color: #7a5a00;
+}
+
 .mastered-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -680,8 +686,34 @@ dd {
   color: var(--color-danger);
 }
 
+.feedback.mastered {
+  background: #fff7df;
+  border: 1px solid #e7c969;
+  color: #7a5a00;
+}
+
+.quiz-navigation {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: var(--space-5);
+}
+
+.arrow-button {
+  margin-top: 0;
+}
+
+.quiz-navigation .secondary-button {
+  justify-self: start;
+}
+
 .next-button {
   margin-top: var(--space-5);
+}
+
+.quiz-navigation .next-button {
+  justify-self: end;
+  margin-top: 0;
 }
 
 .result-score {
@@ -1138,6 +1170,7 @@ dd {
   }
 
   .mode-group,
+  .quiz-navigation,
   .result-grid,
   .summary-hero-grid,
   .stat-card-grid,

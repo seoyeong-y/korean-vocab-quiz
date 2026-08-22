@@ -13,6 +13,7 @@ import {
   markQuizQuestionMastered,
   saveVocabularyBatch,
   submitQuizAnswer,
+  unmarkQuizQuestionMastered,
 } from './api';
 import './styles.css';
 
@@ -58,9 +59,7 @@ function App() {
   const [quizType, setQuizType] = React.useState('general');
   const [questions, setQuestions] = React.useState([]);
   const [currentIndex, setCurrentIndex] = React.useState(0);
-  const [answers, setAnswers] = React.useState([]);
-  const [selectedOptionId, setSelectedOptionId] = React.useState(null);
-  const [feedback, setFeedback] = React.useState(null);
+  const [questionStates, setQuestionStates] = React.useState({});
   const [wrongAnswers, setWrongAnswers] = React.useState([]);
   const [masteredVocabularies, setMasteredVocabularies] = React.useState([]);
   const [statisticsDashboard, setStatisticsDashboard] = React.useState(null);
@@ -70,6 +69,13 @@ function App() {
   const [error, setError] = React.useState('');
 
   const currentQuestion = questions[currentIndex];
+  const currentQuestionState = currentQuestion ? questionStates[currentQuestion.questionId] || {} : {};
+  const selectedOptionId = currentQuestionState.selectedOptionId || null;
+  const feedback = currentQuestionState.feedback || null;
+  const isCurrentQuestionMastered = Boolean(currentQuestionState.mastered);
+  const answers = questions
+    .map((question) => questionStates[question.questionId]?.answer)
+    .filter(Boolean);
   const progress = questions.length ? ((currentIndex + 1) / questions.length) * 100 : 0;
   const correctCount = answers.filter((answer) => answer.correct).length;
   const incorrectCount = answers.length - correctCount;
@@ -80,10 +86,8 @@ function App() {
     setLoading(true);
     setError('');
     setQuestions([]);
-    setAnswers([]);
+    setQuestionStates({});
     setCurrentIndex(0);
-    setSelectedOptionId(null);
-    setFeedback(null);
     setQuizHistorySaved(false);
     setQuizType('general');
 
@@ -130,10 +134,8 @@ function App() {
     setLoading(true);
     setError('');
     setQuestions([]);
-    setAnswers([]);
+    setQuestionStates({});
     setCurrentIndex(0);
-    setSelectedOptionId(null);
-    setFeedback(null);
     setQuizHistorySaved(false);
     setQuizType('review');
 
@@ -217,11 +219,17 @@ function App() {
   }
 
   async function handleSelectOption(option) {
-    if (!currentQuestion || feedback || submitting) {
+    if (!currentQuestion || currentQuestionState.feedback || submitting) {
       return;
     }
 
-    setSelectedOptionId(option.optionId);
+    setQuestionStates((previousStates) => ({
+      ...previousStates,
+      [currentQuestion.questionId]: {
+        ...previousStates[currentQuestion.questionId],
+        selectedOptionId: option.optionId,
+      },
+    }));
     setSubmitting(true);
     setError('');
 
@@ -240,10 +248,23 @@ function App() {
         correctAnswer: result.correctAnswer,
       };
 
-      setFeedback(answer);
-      setAnswers((previousAnswers) => [...previousAnswers, answer]);
+      setQuestionStates((previousStates) => ({
+        ...previousStates,
+        [currentQuestion.questionId]: {
+          ...previousStates[currentQuestion.questionId],
+          selectedOptionId: option.optionId,
+          feedback: answer,
+          answer,
+        },
+      }));
     } catch (submitError) {
-      setSelectedOptionId(null);
+      setQuestionStates((previousStates) => ({
+        ...previousStates,
+        [currentQuestion.questionId]: {
+          ...previousStates[currentQuestion.questionId],
+          selectedOptionId: null,
+        },
+      }));
       setError(normalizeError(submitError.message));
     } finally {
       setSubmitting(false);
@@ -251,7 +272,7 @@ function App() {
   }
 
   async function handleMarkMastered() {
-    if (!currentQuestion || feedback || submitting) {
+    if (!currentQuestion || submitting) {
       return;
     }
 
@@ -259,21 +280,57 @@ function App() {
     setError('');
 
     try {
+      if (currentQuestionState.mastered) {
+        await unmarkQuizQuestionMastered(currentQuestion.questionId);
+        setQuestionStates((previousStates) => {
+          const previousState = previousStates[currentQuestion.questionId] || {};
+          const nextState = {
+            ...previousState,
+            mastered: false,
+          };
+
+          if (previousState.feedback?.masteredOnly) {
+            delete nextState.feedback;
+            delete nextState.answer;
+            nextState.selectedOptionId = null;
+          }
+
+          return {
+            ...previousStates,
+            [currentQuestion.questionId]: nextState,
+          };
+        });
+        return;
+      }
+
       const result = await markQuizQuestionMastered({
         questionId: currentQuestion.questionId,
       });
 
-      const answer = {
+      const masteredAnswer = {
         vocabularyId: currentQuestion.vocabularyId,
         selectedOptionId: null,
         selectedText: '완벽하게 알아요',
         correct: true,
         correctAnswer: result.correctAnswer,
         mastered: true,
+        masteredOnly: true,
       };
 
-      setFeedback(answer);
-      setAnswers((previousAnswers) => [...previousAnswers, answer]);
+      setQuestionStates((previousStates) => {
+        const previousState = previousStates[currentQuestion.questionId] || {};
+        const nextAnswer = previousState.answer || masteredAnswer;
+
+        return {
+          ...previousStates,
+          [currentQuestion.questionId]: {
+            ...previousState,
+            feedback: previousState.feedback || masteredAnswer,
+            answer: nextAnswer,
+            mastered: true,
+          },
+        };
+      });
     } catch (masteredError) {
       setError(normalizeError(masteredError.message));
     } finally {
@@ -308,9 +365,16 @@ function App() {
     }
 
     setCurrentIndex((index) => index + 1);
-    setSelectedOptionId(null);
-    setFeedback(null);
     setQuizHistorySaved(false);
+    setError('');
+  }
+
+  function handlePrevious() {
+    if (currentIndex === 0 || submitting) {
+      return;
+    }
+
+    setCurrentIndex((index) => index - 1);
     setError('');
   }
 
@@ -318,10 +382,8 @@ function App() {
     setScreen('start');
     setQuizType('general');
     setQuestions([]);
-    setAnswers([]);
+    setQuestionStates({});
     setCurrentIndex(0);
-    setSelectedOptionId(null);
-    setFeedback(null);
     setError('');
   }
 
@@ -380,10 +442,12 @@ function App() {
           progress={progress}
           selectedOptionId={selectedOptionId}
           feedback={feedback}
+          isMastered={isCurrentQuestionMastered}
           submitting={submitting}
           error={error}
           onSelectOption={handleSelectOption}
           onMarkMastered={handleMarkMastered}
+          onPrevious={handlePrevious}
           onNext={handleNext}
         />
       )}
@@ -1256,10 +1320,12 @@ function QuizScreen({
   progress,
   selectedOptionId,
   feedback,
+  isMastered,
   submitting,
   error,
   onSelectOption,
   onMarkMastered,
+  onPrevious,
   onNext,
 }) {
   return (
@@ -1297,32 +1363,48 @@ function QuizScreen({
       </div>
 
       <button
-        className="mastered-button"
-        disabled={Boolean(feedback) || submitting}
+        className={isMastered ? 'mastered-button selected' : 'mastered-button'}
+        disabled={submitting}
         type="button"
         onClick={onMarkMastered}
       >
-        완벽하게 알아요
+        {isMastered ? '완벽하게 알아요 취소' : '완벽하게 알아요'}
       </button>
 
       {submitting && <p className="status-message">정답 확인 중</p>}
       {error && <ErrorMessage message={error} />}
       {feedback && (
         <div className={feedback.correct ? 'feedback correct' : 'feedback incorrect'} aria-live="polite">
-          <strong>{feedback.mastered ? '숙지 어휘로 기록했습니다.' : feedback.correct ? '정답입니다.' : '오답입니다.'}</strong>
-          {feedback.mastered && <span>앞으로 일반 퀴즈와 오답 복습에서 제외됩니다.</span>}
+          <strong>{feedback.masteredOnly ? '숙지 어휘로 기록했습니다.' : feedback.correct ? '정답입니다.' : '오답입니다.'}</strong>
+          {feedback.masteredOnly && <span>앞으로 일반 퀴즈와 오답 복습에서 제외됩니다.</span>}
           {!feedback.correct && <span>정답: {feedback.correctAnswer}</span>}
         </div>
       )}
+      {isMastered && !feedback?.masteredOnly && (
+        <div className="feedback mastered" aria-live="polite">
+          <strong>완벽히 아는 어휘로 기록했습니다.</strong>
+          <span>다시 누르면 숙지 처리를 취소할 수 있습니다.</span>
+        </div>
+      )}
 
-      <button
-        className="primary-button next-button"
-        disabled={!feedback || submitting}
-        type="button"
-        onClick={onNext}
-      >
-        {currentIndex === totalCount - 1 ? '결과 보기' : '다음 문제'}
-      </button>
+      <div className="quiz-navigation" aria-label="문제 이동">
+        <button
+          className="secondary-button arrow-button"
+          disabled={currentIndex === 0 || submitting}
+          type="button"
+          onClick={onPrevious}
+        >
+          ← 이전 문제
+        </button>
+        <button
+          className="primary-button next-button arrow-button"
+          disabled={!feedback || submitting}
+          type="button"
+          onClick={onNext}
+        >
+          {currentIndex === totalCount - 1 ? '결과 보기' : '다음 문제 →'}
+        </button>
+      </div>
     </section>
   );
 }

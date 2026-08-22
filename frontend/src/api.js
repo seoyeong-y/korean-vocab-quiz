@@ -43,6 +43,12 @@ export function markQuizQuestionMastered(payload) {
   });
 }
 
+export function unmarkQuizQuestionMastered(questionId) {
+  return request(`/api/quizzes/mastered/${questionId}`, {
+    method: 'DELETE',
+  });
+}
+
 export function completeQuiz(payload) {
   return request('/api/statistics/quiz-completions', {
     method: 'POST',

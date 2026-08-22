@@ -100,7 +100,8 @@ public class QuizService {
                 correctVocabulary.getId(),
                 correctVocabulary.getCategory(),
                 session.mode(),
-                correct
+                correct,
+                false
         ));
 
         return new QuizSubmitResponse(correct, session.correctAnswer(), correctVocabulary.getId());
@@ -118,15 +119,34 @@ public class QuizService {
             masteredVocabularyRepository.save(new MasteredVocabulary(vocabulary));
         }
         wrongAnswerService.deleteByVocabulary(vocabulary);
-        sessionStore.recordSubmissionResult(new QuizQuestionSubmissionResult(
-                session.questionId(),
-                vocabulary.getId(),
-                vocabulary.getCategory(),
-                session.mode(),
-                true
-        ));
+        if (sessionStore.findSubmissionResult(session.questionId()).isEmpty()) {
+            sessionStore.recordSubmissionResult(new QuizQuestionSubmissionResult(
+                    session.questionId(),
+                    vocabulary.getId(),
+                    vocabulary.getCategory(),
+                    session.mode(),
+                    true,
+                    true
+            ));
+        }
 
         return new QuizMasteredResponse(true, session.correctAnswer(), vocabulary.getId());
+    }
+
+    @Transactional
+    public QuizMasteredResponse unmarkMastered(String questionId) {
+        QuizQuestionSession session = sessionStore.findValid(questionId)
+                .orElseThrow(() -> new QuizSubmissionException("Question is not valid or has expired."));
+
+        Vocabulary vocabulary = vocabularyRepository.findById(session.vocabularyId())
+                .orElseThrow(() -> new ResourceNotFoundException("Vocabulary not found. id=" + session.vocabularyId()));
+
+        masteredVocabularyRepository.deleteByVocabulary(vocabulary);
+        sessionStore.findSubmissionResult(questionId)
+                .filter(QuizQuestionSubmissionResult::mastered)
+                .ifPresent(result -> sessionStore.removeSubmissionResult(questionId));
+
+        return new QuizMasteredResponse(false, session.correctAnswer(), vocabulary.getId());
     }
 
     private QuizQuestionResponse createQuestion(Vocabulary vocabulary, List<Vocabulary> optionSourceVocabularies, QuizMode mode) {
