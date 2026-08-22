@@ -216,6 +216,38 @@ function App() {
     }
   }
 
+  async function handleStartWrongOnly() {
+    setLoading(true);
+    setError('');
+    setQuestions([]);
+    setQuestionStates({});
+    setCurrentIndex(0);
+    setQuizHistorySaved(false);
+    setQuizType('review');
+
+    try {
+      const quiz = await createWrongAnswerReviewQuiz({
+        category: settings.category,
+        mode: settings.mode,
+        questionCount: Number(settings.questionCount),
+      });
+
+      if (!Array.isArray(quiz) || quiz.length === 0) {
+        setError('선택한 카테고리와 모드에 복습할 오답이 없습니다.');
+        setScreen('start');
+        return;
+      }
+
+      setQuestions(quiz);
+      setScreen('quiz');
+    } catch (reviewError) {
+      setError(normalizeError(reviewError.message));
+      setScreen('start');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleDeleteWrongAnswer(id) {
     setLoading(true);
     setError('');
@@ -554,6 +586,7 @@ function App() {
           availabilityError={availabilityError}
           onChange={setSettings}
           onStart={handleStart}
+          onStartWrongOnly={handleStartWrongOnly}
           onOpenWrongAnswers={loadWrongAnswers}
           onOpenMyPage={loadMyPage}
           onOpenAdmin={() => setScreen('admin')}
@@ -641,6 +674,7 @@ function StartScreen({
   availabilityError,
   onChange,
   onStart,
+  onStartWrongOnly,
   onOpenWrongAnswers,
   onOpenMyPage,
   onOpenAdmin,
@@ -784,6 +818,14 @@ function StartScreen({
                 <strong>직접 입력</strong>
               </span>
             </label>
+            <button
+              className="secondary-button wrong-only-button"
+              disabled={loading}
+              type="button"
+              onClick={onStartWrongOnly}
+            >
+              틀린 문제만
+            </button>
           </div>
 
           <div className="custom-count-row">

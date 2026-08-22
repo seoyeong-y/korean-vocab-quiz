@@ -631,6 +631,16 @@ curl -X POST http://localhost:8080/api/quizzes/submit \
   }'
 ```
 
+오답 복습 생성 요청에 `category`를 함께 보내면 해당 카테고리의 오답만 대상으로 할 수 있습니다. 생략하면 선택한 모드의 전체 오답을 대상으로 합니다.
+
+```json
+{
+  "category": "NATIVE_KOREAN",
+  "mode": "WORD_TO_MEANING",
+  "questionCount": 5
+}
+```
+
 Delete wrong answers:
 
 ```bash
