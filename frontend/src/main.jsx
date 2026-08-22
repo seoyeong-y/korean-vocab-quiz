@@ -1749,7 +1749,7 @@ function QuizScreen({
           {!feedback.correct && feedback.selectedWord && feedback.selectedMeaning && (
             <span>
               {feedback.mode === 'WORD_TO_MEANING'
-                ? `선택한 오답에 해당하는 단어는 ${feedback.selectedWord}입니다.`
+                ? `선택한 오답에 해당하는 어휘는 ${feedback.selectedWord}입니다.`
                 : `선택한 오답에 해당하는 뜻은 ${feedback.selectedMeaning}입니다.`}
             </span>
           )}
