@@ -1,6 +1,7 @@
 package com.koreanvocabquiz.statistics;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -10,6 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.koreanvocabquiz.learning.VocabularyLearningProgressRepository;
 import com.koreanvocabquiz.quiz.QuizMode;
 import com.koreanvocabquiz.quiz.QuizQuestionSession;
 import com.koreanvocabquiz.quiz.QuizQuestionSessionStore;
@@ -52,6 +54,9 @@ class StatisticsControllerTest {
     @Autowired
     private QuizQuestionSessionStore sessionStore;
 
+    @Autowired
+    private VocabularyLearningProgressRepository learningProgressRepository;
+
     private Vocabulary apple;
     private Vocabulary banana;
     private Vocabulary grape;
@@ -60,6 +65,7 @@ class StatisticsControllerTest {
     void setUp() {
         quizHistoryRepository.deleteAll();
         wrongAnswerRepository.deleteAll();
+        learningProgressRepository.deleteAll();
         vocabularyRepository.deleteAll();
 
         apple = vocabularyRepository.save(new Vocabulary("사과", "apple", VocabularyCategory.NATIVE_KOREAN, null));
@@ -103,7 +109,39 @@ class StatisticsControllerTest {
                 .andExpect(jsonPath("$.categories[0].totalQuestionCount").value(2))
                 .andExpect(jsonPath("$.modes[0].mode").value("WORD_TO_MEANING"))
                 .andExpect(jsonPath("$.modes[0].totalQuestionCount").value(2))
-                .andExpect(jsonPath("$.recentHistories", hasSize(1)));
+                .andExpect(jsonPath("$.recentHistories", hasSize(1)))
+                .andExpect(jsonPath("$.vocabularyProgresses", hasSize(2)));
+    }
+
+    @Test
+    void completeQuizSavesVocabularyLearningProgress() throws Exception {
+        TestSession correctSession = saveSession(apple, apple, QuizMode.WORD_TO_MEANING);
+        TestSession wrongSession = saveSession(banana, grape, QuizMode.WORD_TO_MEANING);
+        submit(correctSession);
+        submit(wrongSession);
+
+        mockMvc.perform(post("/api/statistics/quiz-completions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "NATIVE_KOREAN",
+                                  "mode": "WORD_TO_MEANING",
+                                  "questionIds": ["%s", "%s"],
+                                  "wrongAnswerReview": false
+                                }
+                                """.formatted(correctSession.questionId(), wrongSession.questionId())))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/statistics/dashboard"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vocabularyProgresses", hasSize(2)));
+
+        var appleProgress = learningProgressRepository.findByVocabulary(apple).orElseThrow();
+        var bananaProgress = learningProgressRepository.findByVocabulary(banana).orElseThrow();
+        assertEquals(1, appleProgress.getAttemptCount());
+        assertEquals(1, appleProgress.getCorrectCount());
+        assertEquals(1, bananaProgress.getAttemptCount());
+        assertEquals(1, bananaProgress.getIncorrectCount());
     }
 
     @Test
@@ -116,7 +154,8 @@ class StatisticsControllerTest {
                 .andExpect(jsonPath("$.categories", hasSize(6)))
                 .andExpect(jsonPath("$.modes", hasSize(3)))
                 .andExpect(jsonPath("$.recentHistories", hasSize(0)))
-                .andExpect(jsonPath("$.mostWrongVocabularies", hasSize(0)));
+                .andExpect(jsonPath("$.mostWrongVocabularies", hasSize(0)))
+                .andExpect(jsonPath("$.vocabularyProgresses", hasSize(0)));
     }
 
     @Test

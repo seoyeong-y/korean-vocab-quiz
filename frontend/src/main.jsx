@@ -633,6 +633,7 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
   const modeStats = dashboard?.modes || [];
   const recentHistories = dashboard?.recentHistories || [];
   const mostWrongVocabularies = dashboard?.mostWrongVocabularies || [];
+  const vocabularyProgresses = dashboard?.vocabularyProgresses || [];
 
   return (
     <section className="panel my-page-panel" aria-labelledby="my-page-title">
@@ -819,6 +820,31 @@ function MyPageScreen({ dashboard, wrongAnswers, masteredVocabularies, loading, 
                 title={item.word}
                 description={item.meaning}
                 meta={`${modeLabel(item.quizMode)} · ${item.wrongCount}회 틀림`}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="dashboard-section" aria-labelledby="vocabulary-progress-title">
+        <div className="section-title-row">
+          <h2 id="vocabulary-progress-title">풀어본 어휘</h2>
+          <span>{vocabularyProgresses.length}개</span>
+        </div>
+        {vocabularyProgresses.length === 0 ? (
+          <div className="empty-state compact-empty-state">
+            <strong>아직 풀어본 어휘 기록이 없습니다.</strong>
+            <span>일반 퀴즈를 완료하면 단어별 풀이 횟수가 표시됩니다.</span>
+          </div>
+        ) : (
+          <div className="learning-word-list" role="list">
+            {vocabularyProgresses.map((item) => (
+              <LearningWordItem
+                key={item.vocabularyId}
+                category={item.category}
+                title={item.word}
+                description={item.meaning}
+                meta={`${item.attemptCount}회 풀이 · 정답 ${item.correctCount} · 오답 ${item.incorrectCount} · ${item.accuracy}%`}
               />
             ))}
           </div>

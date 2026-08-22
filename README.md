@@ -362,7 +362,8 @@ Quiz generation rules:
 - `category`는 `VocabularyCategory` 값 중 하나여야 합니다.
 - 프론트엔드 기본 퀴즈 화면은 `NATIVE_KOREAN`, `SINO_KOREAN`, `LOANWORD`, `PROVERB`, `IDIOM`, `FOUR_CHARACTER_IDIOM`을 고유어, 한자어, 외래어, 속담, 관용어, 사자성어로 표시합니다.
 - `questionCount`는 1 이상이어야 합니다.
-- 선택한 category의 어휘에서 랜덤으로 문제를 생성합니다.
+- 선택한 category의 어휘 중 아직 풀지 않은 어휘를 우선 출제합니다.
+- 모두 풀어본 어휘라면 `attemptCount`가 낮은 어휘를 우선하고, 같은 풀이 횟수 안에서는 랜덤으로 섞어 출제합니다.
 - `MIXED`로 생성한 문제도 응답의 `mode`에는 실제 출제 방향인 `WORD_TO_MEANING` 또는 `MEANING_TO_WORD`가 내려갑니다.
 - `완벽하게 알아요`로 등록한 숙지 어휘는 일반 퀴즈 생성 대상에서 제외됩니다.
 - 같은 퀴즈 세트 안에서 동일한 `vocabularyId`는 중복 출제되지 않습니다.
@@ -492,6 +493,9 @@ Quiz error cases:
 서버는 각 문제의 제출 결과를 서버 메모리에 기록해 두었다가, 완료 요청 시 해당 결과를 기준으로 `quiz_histories`에 저장합니다.
 따라서 통계의 정답/오답 수는 프론트에서 계산한 값을 그대로 신뢰하지 않습니다.
 
+퀴즈 완료 시 각 문제의 Vocabulary 기준으로 `vocabulary_learning_progresses`도 함께 갱신합니다.
+이 테이블은 어휘별 풀이 횟수, 정답 횟수, 오답 횟수, 마지막 풀이 시각을 저장하며, 다음 일반 퀴즈 생성 시 풀지 않은 어휘와 적게 푼 어휘를 우선 출제하는 데 사용합니다.
+
 오답 복습 퀴즈는 일반 학습 정답률을 왜곡하지 않도록 현재 통계 저장 대상에서 제외합니다.
 `MIXED` 모드로 완료한 퀴즈는 `quiz_mode`에 `MIXED`로 저장됩니다.
 
@@ -540,8 +544,9 @@ Dashboard response includes:
 - `modes`: `WORD_TO_MEANING`, `MEANING_TO_WORD`, `MIXED` 모드별 통계
 - `recentHistories`: 최근 완료한 일반 퀴즈 기록 10개
 - `mostWrongVocabularies`: 기존 `wrong_answers` 기준 많이 틀린 어휘 상위 5개
+- `vocabularyProgresses`: 최근 풀이한 어휘별 풀이 횟수, 정답/오답 수, 정답률 20개
 
-마이 페이지에서는 학습 통계, 많이 틀린 어휘, 최근 학습 기록, 틀린 문제, 완벽히 아는 문제를 함께 확인할 수 있습니다.
+마이 페이지에서는 학습 통계, 많이 틀린 어휘, 최근 학습 기록, 틀린 문제, 풀어본 어휘, 완벽히 아는 문제를 함께 확인할 수 있습니다.
 현재 MVP에서는 로그인 기능이 없으므로 모든 통계와 숙지/오답 목록은 단일 사용자 데이터처럼 동작합니다.
 
 ## Wrong Answer Review
