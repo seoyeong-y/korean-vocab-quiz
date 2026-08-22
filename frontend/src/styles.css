@@ -308,6 +308,12 @@ legend small,
   justify-content: space-between;
 }
 
+.quiz-header-actions {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+}
+
 .action-row {
   flex-wrap: wrap;
 }
@@ -693,8 +699,8 @@ dd {
 }
 
 .finish-early-button {
-  margin-top: var(--space-4);
-  width: 100%;
+  margin-top: 0;
+  white-space: nowrap;
 }
 
 .quiz-navigation {
@@ -1193,6 +1199,7 @@ dd {
   .admin-action-row,
   .review-toolbar,
   .save-panel,
+  .quiz-header-actions,
   .quiz-header,
   .screen-heading,
   .toolbar,

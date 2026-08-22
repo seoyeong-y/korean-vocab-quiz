@@ -1402,9 +1402,19 @@ function QuizScreen({
     <section className="panel quiz-panel" aria-labelledby="quiz-title">
       <div className="quiz-header">
         <p className="question-count">문제 {currentIndex + 1} / {totalCount}</p>
-        <p className="mode-label">
-          {quizType === 'review' ? '오답 복습' : '일반 퀴즈'} · {modeLabel(question.mode)}
-        </p>
+        <div className="quiz-header-actions">
+          <p className="mode-label">
+            {quizType === 'review' ? '오답 복습' : '일반 퀴즈'} · {modeLabel(question.mode)}
+          </p>
+          <button
+            className="secondary-button finish-early-button"
+            disabled={answeredCount === 0 || submitting}
+            type="button"
+            onClick={onFinishEarly}
+          >
+            여기까지 저장하고 결과 보기
+          </button>
+        </div>
       </div>
 
       <div className="progress-track" aria-label={`진행률 ${Math.round(progress)}%`}>
@@ -1438,7 +1448,7 @@ function QuizScreen({
         type="button"
         onClick={onMarkMastered}
       >
-        {isMastered ? '완벽하게 알아요 취소' : '완벽하게 알아요'}
+        완벽하게 알아요
       </button>
 
       {submitting && <p className="status-message">정답 확인 중</p>}
@@ -1456,15 +1466,6 @@ function QuizScreen({
           <span>다시 누르면 숙지 처리를 취소할 수 있습니다.</span>
         </div>
       )}
-
-      <button
-        className="secondary-button finish-early-button"
-        disabled={answeredCount === 0 || submitting}
-        type="button"
-        onClick={onFinishEarly}
-      >
-        여기까지 저장하고 결과 보기
-      </button>
 
       <div className="quiz-navigation" aria-label="문제 이동">
         <button
